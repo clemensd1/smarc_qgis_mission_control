@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+.mypy_cache/
+
+*.sublime-*
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+untracked/
+src/third_party
