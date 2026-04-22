@@ -3,7 +3,7 @@
 [WARA-PS API](https://api-docs.waraps.org/#/) compliant mission planning in the open-source GIS software [QGIS](https://qgis.org/).
 
 ## Installation instructions
-Supported QGIS version: v3.44 LTR
+Supported QGIS version: v3.44 LTR  
 Supported Ubuntu version(s): 22.04 (Python 3.10)
 
 1. Install QGIS v3.44 LTR from [qgis.org](https://qgis.org/download)
