@@ -4,6 +4,7 @@ from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.gui import *
 from qgis.core import *
+from pathlib import Path
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
@@ -29,8 +30,11 @@ class SMaRCMissionControlPlugin(QObject):
 
     def initGui(self):
         """Called when the plugin is activated."""
+        self.plugin_dir = Path(__file__).parent
+
         self.toolbar = self.iface.addToolBar("SMaRC Mission Control")
         self.toolbar.setObjectName("SMaRC Mission Control")
+        self.toolbar.setIconSize(QSize(84, 24)) # default is (24,24)
 
         self.missionControlDock = MissionControlDockWidget(
             self.missionContext,
@@ -40,10 +44,13 @@ class SMaRCMissionControlPlugin(QObject):
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.missionControlDock)
         self.missionControlDock.hide()
 
+        self.smarc_icon = self.plugin_dir / 'ui' / 'svg' / 'smarclogo-liten-rgb.png' # for custom svg logo in mqtt button
+
         self.missionControlAction = self.missionControlDock.toggleViewAction()
         self.missionControlAction.setIcon(
-            QgsApplication.getThemeIcon("mLayoutItemTable.svg")
+            QIcon(self.smarc_icon)
         )
+
         self.missionControlAction.setText(self.tr("Open Mission Control"))
         self.toolbar.addAction(self.missionControlAction)
 
@@ -56,8 +63,19 @@ class SMaRCMissionControlPlugin(QObject):
         self.mqttAction.triggered.connect(self.onMqttActionClicked)
         self.toolbar.addAction(self.mqttAction)
 
+        # Set color feedback of MQTT button to "disconnected"
+        self.mqtt_button = self.toolbar.widgetForAction(self.mqttAction)
+        if self.mqtt_button:
+            self.mqtt_button.setStyleSheet("""
+                background-color: #f6c7b3;
+                color: black;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font: bold 10px;
+                font-family: Arial;
+            """)
+
         self.iface.addPluginToMenu("SMaRC Mission Control", self.missionControlAction)
-        # self.iface.addPluginToMenu("MQTT Connection", self.mqttAction)
 
     def unload(self):
         """Called when the plugin is deactivated."""
@@ -108,3 +126,13 @@ class SMaRCMissionControlPlugin(QObject):
 
         self.fleetContext.mqtt.connect(dialog.ip(), dialog.port(), dialog.username(),
                                        dialog.password(), dialog.context())
+
+        # Set color feedback of MQTT button to "connected"
+        self.mqtt_button.setStyleSheet("""
+            background-color: #d9ead3;
+            color: black;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font: bold 10px;
+            font-family: Arial;
+        """)

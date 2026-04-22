@@ -101,7 +101,7 @@ class Ui_VehicleCardWidget(object):
         self.bodyVLayout.setObjectName("bodyVLayout")
         self.taskList = QtWidgets.QTableView(self.body)
         font = QtGui.QFont()
-        font.setPointSize(13)
+        font.setPointSize(9)
         self.taskList.setFont(font)
         self.taskList.setStyleSheet("")
         self.taskList.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
