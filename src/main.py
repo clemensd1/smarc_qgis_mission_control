@@ -30,7 +30,7 @@ class SMaRCMissionControlPlugin(QObject):
 
     def initGui(self):
         """Called when the plugin is activated."""
-        self.plugin_dir = os.path.dirname(__file__)
+        self.plugin_dir = Path(__file__).parent
 
         self.toolbar = self.iface.addToolBar("SMaRC Mission Control")
         self.toolbar.setObjectName("SMaRC Mission Control")
