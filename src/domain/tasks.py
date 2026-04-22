@@ -258,8 +258,8 @@ class CustomTask(Task):
         return cls(
             description = str(data["description"]),
             uuid = UUID(data["task-uuid"]),
-            action = data["params"]["action-name"],
-            json = data["params"]["json-params"],
+            action = str(data["params"]["action-name"]),
+            json = str(data["params"]["json-params"]),
         )
 
     def toJson(self) -> dict:
