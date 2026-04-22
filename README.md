@@ -1,6 +1,6 @@
 # SMaRC Mission Control Plugin for QGIS
 
-[WARA-PS API](https://api-docs.waraps.org/#/) compliant mission planning in the open-source GIS software [QGIS](https://qgis.org/). she says &lt;h1> is large
+[WARA-PS API](https://api-docs.waraps.org/#/) compliant mission planning in the open-source GIS software [QGIS](https://qgis.org/).
 
 ## Installation instructions
 Supported QGIS version: v3.44 LTR
