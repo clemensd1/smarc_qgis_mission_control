@@ -4,6 +4,7 @@ from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.gui import *
 from qgis.core import *
+import os
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
@@ -29,6 +30,8 @@ class SMaRCMissionControlPlugin(QObject):
 
     def initGui(self):
         """Called when the plugin is activated."""
+        self.plugin_dir = os.path.dirname(__file__)
+
         self.toolbar = self.iface.addToolBar("SMaRC Mission Control")
         self.toolbar.setObjectName("SMaRC Mission Control")
 
@@ -52,12 +55,25 @@ class SMaRCMissionControlPlugin(QObject):
         self.toolbarSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.toolbar.addWidget(self.toolbarSpacer)
 
+        # self.icon = os.path.join(os.path.join(self.plugin_dir, 'ui', 'svg', 'Mqtt-hor.svg.png')) # for custom svg logo in mqtt button
+        # self.mqttAction = QAction(QIcon(self.icon), self.tr('MQTT'), self.iface.mainWindow()) # for custom svg logo in mqtt button
         self.mqttAction = QAction(self.tr('MQTT'), self.iface.mainWindow())
         self.mqttAction.triggered.connect(self.onMqttActionClicked)
         self.toolbar.addAction(self.mqttAction)
 
+        # Set color feedback of MQTT button to "disconnected"
+        self.mqtt_button = self.toolbar.widgetForAction(self.mqttAction)
+        if self.mqtt_button:
+            self.mqtt_button.setStyleSheet("""
+                background-color: #f6c7b3;
+                color: black;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font: bold 10px;
+                font-family: Arial;
+            """)
+
         self.iface.addPluginToMenu("SMaRC Mission Control", self.missionControlAction)
-        # self.iface.addPluginToMenu("MQTT Connection", self.mqttAction)
 
     def unload(self):
         """Called when the plugin is deactivated."""
@@ -108,3 +124,13 @@ class SMaRCMissionControlPlugin(QObject):
 
         self.fleetContext.mqtt.connect(dialog.ip(), dialog.port(), dialog.username(),
                                        dialog.password(), dialog.context())
+
+        # Set color feedback of MQTT button to "connected"
+        self.mqtt_button.setStyleSheet("""
+            background-color: #d9ead3;
+            color: black;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font: bold 10px;
+            font-family: Arial;
+        """)
