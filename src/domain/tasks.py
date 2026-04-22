@@ -31,7 +31,7 @@ class TaskType(StrEnum):
     # AUV_SPIRAL_TO_DEPTH = "auv-spiral-to-depth"
     LOITER              = "loiter"
     # DEPLOY_PAYLOAD  = "deploy-payload"
-    CUSTOM              = "custom"
+    CUSTOM              = "custom-task"
 
 @dataclass
 class Task(SchemaMixin):
@@ -247,7 +247,25 @@ class LoiterTask(Task):
 class CustomTask(Task):
     type = TaskType.CUSTOM
 
-    timeout: Annotated[float, Unit("s"), Column("Timeout")] \
-           = .0
+    action : Annotated[str, Column("Action")] \
+           = ""
     json   : Annotated[str, Column("JSON")] \
            = ""
+
+    @classmethod
+    def fromJson(cls, data: dict) -> Self:
+        assert(data["name"] == str(cls.type))
+        return cls(
+            description = str(data["description"]),
+            uuid = UUID(data["task-uuid"]),
+            action = str(data["params"]["action-name"]),
+            json = str(data["params"]["json-params"]),
+        )
+
+    def toJson(self) -> dict:
+        return super().toJson() | {
+            "params": {
+                "action-name": self.action,
+                "json-params": self.json,
+            }
+        }
