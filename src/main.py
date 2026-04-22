@@ -4,7 +4,7 @@ from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.gui import *
 from qgis.core import *
-import os
+from pathlib import Path
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
