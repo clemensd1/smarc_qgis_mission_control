@@ -44,7 +44,7 @@ class SMaRCMissionControlPlugin(QObject):
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.missionControlDock)
         self.missionControlDock.hide()
 
-        self.smarc_icon = os.path.join(os.path.join(self.plugin_dir, 'ui', 'svg', 'smarclogo-liten-rgb.png')) # for custom svg logo in mqtt button
+        self.smarc_icon = self.plugin_dir / 'ui' / 'svg' / 'smarclogo-liten-rgb.png' # for custom svg logo in mqtt button
 
         self.missionControlAction = self.missionControlDock.toggleViewAction()
         self.missionControlAction.setIcon(
