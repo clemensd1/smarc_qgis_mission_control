@@ -251,3 +251,21 @@ class CustomTask(Task):
            = .0
     json   : Annotated[str, Column("JSON")] \
            = ""
+
+    @classmethod
+    def fromJson(cls, data: dict) -> Self:
+        assert(data["name"] == str(cls.type))
+        return cls(
+            description = str(data["description"]),
+            uuid = UUID(data["task-uuid"]),
+            timeout = float(data["params"]["timeout"]),
+            json = str(data["params"]["json"])
+        )
+
+    def toJson(self) -> dict:
+        return super().toJson() | {
+            "params": {
+                "timeout": self.timeout,
+                "json": str(self.json)
+            }
+        }

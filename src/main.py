@@ -34,6 +34,7 @@ class SMaRCMissionControlPlugin(QObject):
 
         self.toolbar = self.iface.addToolBar("SMaRC Mission Control")
         self.toolbar.setObjectName("SMaRC Mission Control")
+        self.toolbar.setIconSize(QSize(84, 24)) # default is (24,24)
 
         self.missionControlDock = MissionControlDockWidget(
             self.missionContext,
@@ -43,10 +44,13 @@ class SMaRCMissionControlPlugin(QObject):
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.missionControlDock)
         self.missionControlDock.hide()
 
+        self.smarc_icon = os.path.join(os.path.join(self.plugin_dir, 'ui', 'svg', 'smarclogo-liten-rgb.png')) # for custom svg logo in mqtt button
+
         self.missionControlAction = self.missionControlDock.toggleViewAction()
         self.missionControlAction.setIcon(
-            QgsApplication.getThemeIcon("mLayoutItemTable.svg")
+            QIcon(self.smarc_icon)
         )
+
         self.missionControlAction.setText(self.tr("Open Mission Control"))
         self.toolbar.addAction(self.missionControlAction)
 
@@ -55,8 +59,6 @@ class SMaRCMissionControlPlugin(QObject):
         self.toolbarSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.toolbar.addWidget(self.toolbarSpacer)
 
-        # self.icon = os.path.join(os.path.join(self.plugin_dir, 'ui', 'svg', 'Mqtt-hor.svg.png')) # for custom svg logo in mqtt button
-        # self.mqttAction = QAction(QIcon(self.icon), self.tr('MQTT'), self.iface.mainWindow()) # for custom svg logo in mqtt button
         self.mqttAction = QAction(self.tr('MQTT'), self.iface.mainWindow())
         self.mqttAction.triggered.connect(self.onMqttActionClicked)
         self.toolbar.addAction(self.mqttAction)
