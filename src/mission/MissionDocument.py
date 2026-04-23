@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from typing import Any, assert_never
+from typing import Any
 from pathlib import Path
 import json
 
@@ -7,6 +7,7 @@ from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject
 from qgis.PyQt.QtWidgets import QUndoCommand
 from qgis.core import QgsPointXY
 
+from ..compat import assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
 from ..domain.tasks import *

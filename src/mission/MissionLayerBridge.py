@@ -1,4 +1,3 @@
-from typing import assert_never
 from uuid import UUID
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -6,7 +5,7 @@ from contextlib import contextmanager
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
 from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY
 
-from ..compat import StrEnum
+from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
 from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
