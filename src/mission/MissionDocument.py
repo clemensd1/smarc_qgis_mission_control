@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from typing import Self, Any, assert_never
+from typing import Any, assert_never
 from pathlib import Path
 import json
 
@@ -58,7 +58,8 @@ class MissionDocument(QObject):
         self._keepalive_undo = []
 
     @classmethod
-    def fromFile(cls, path: str | Path, parent: QObject | None = None) -> Self:
+    def fromFile(cls, path: str | Path,
+                 parent: QObject | None = None) -> 'MissionDocument':
         p = Path(path)
         with p.open() as fp:
             plan = MissionPlan.fromJson(json.load(fp))

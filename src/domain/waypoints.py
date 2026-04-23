@@ -1,4 +1,4 @@
-from typing import Annotated, Self
+from typing import Annotated
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
@@ -21,7 +21,7 @@ class Waypoint(SchemaMixin):
     uuid      : UUID = field(default_factory = uuid4, kw_only = True)
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict):
         """Load a waypoint from mission plan JSON."""
         # NOTE: This should be implemented by subclasses
         raise NotImplementedError
@@ -65,7 +65,7 @@ class AUVWaypoint(Waypoint):
         }
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'AUVWaypoint':
         # make sure not parsing a WARA-PS GeoPoint by accident
         if data.get("rostype") == "GeoPoint":
             raise ValueError(f"GeoPoint data passed to {cls.__name__}")
@@ -97,7 +97,7 @@ class GeoPoint(Waypoint):
         }
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'GeoPoint':
         # make sure we ARE parsing a WARA-PS GeoPoint
         if data.get("rostype") != "GeoPoint":
             raise ValueError(f"Non-GeoPoint data passed to {cls.__name__}")

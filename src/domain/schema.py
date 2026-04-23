@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields
 from typing import (get_origin, get_args, get_type_hints,
-                    Annotated, Any, Self, Type, Sequence)
+                    Annotated, Any, Type, Sequence)
 from enum import Enum
 
 __all__ = ["Unit", "Column", "FieldSpec", "Schema"]
@@ -63,7 +63,7 @@ class Schema:
 
     # TODO: cache
     @classmethod
-    def fromDataclass(cls, dtCls) -> Self:
+    def fromDataclass(cls, dtCls) -> 'Schema':
         def unwrapAnnotated(t: Any):
             meta = []
             while get_origin(t) is Annotated:
