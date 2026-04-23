@@ -1,9 +1,9 @@
 from typing import (get_type_hints, get_args,
                     Type, ClassVar, Annotated)
 from dataclasses import dataclass, field, fields
-from enum import StrEnum
 from uuid import UUID, uuid4
 
+from ..compat import StrEnum
 from .schema import Schema, SchemaMixin, Unit, Column
 from .waypoints import *
 

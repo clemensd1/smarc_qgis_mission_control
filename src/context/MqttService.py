@@ -1,5 +1,4 @@
 import re
-import enum
 import json
 from uuid import UUID, uuid4
 from dataclasses import dataclass
@@ -13,6 +12,7 @@ path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'third_party')
 sys.path.insert(0, path)
 import paho.mqtt.client as mqtt
 
+from ..compat import StrEnum
 from ..domain.waraps import *
 from ..domain.waypoints import GeoPoint
 from ..domain.missionplan import MissionPlan
@@ -41,7 +41,7 @@ class VehicleTaskStateEvent(VehicleEvent):
     tasksAvailable: list[WaraPsAvailableTask]
     tasksExecuting: list[WaraPsExecutingTask]
 
-class MqttConnectionState(enum.StrEnum):
+class MqttConnectionState(StrEnum):
     DISCONNECTED = "disconnected"
     CONNECTED = "connected"
 
