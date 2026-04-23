@@ -1,4 +1,3 @@
-from typing import Self
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -14,7 +13,7 @@ class MissionIndex:
     waypointTaskMap: dict[UUID, UUID] = field(default_factory=dict)
 
     @classmethod
-    def fromMissionPlan(cls, plan: MissionPlan) -> Self:
+    def fromMissionPlan(cls, plan: MissionPlan) -> 'MissionIndex':
         index = cls()
         for task in plan.tasks:
             index.registerTask(task)

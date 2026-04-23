@@ -1,4 +1,4 @@
-from typing import Any, Self, Annotated
+from typing import Any, Annotated
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
@@ -19,7 +19,7 @@ class MissionPlan(SchemaMixin):
     # fmt: on
 
     @classmethod
-    def fromJson(cls, data: dict[str, Any]) -> Self:
+    def fromJson(cls, data: dict[str, Any]) -> 'MissionPlan':
         tasks = []
         for c in data["children"]:
             # NOTE: task "name" is actually the type, e.g. move-to

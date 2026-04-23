@@ -1,9 +1,9 @@
 from typing import (get_type_hints, get_args,
-                    Type, ClassVar, Self, Annotated)
+                    Type, ClassVar, Annotated)
 from dataclasses import dataclass, field, fields
-from enum import StrEnum
 from uuid import UUID, uuid4
 
+from ..compat import StrEnum
 from .schema import Schema, SchemaMixin, Unit, Column
 from .waypoints import *
 
@@ -47,7 +47,7 @@ class Task(SchemaMixin):
     type        : ClassVar[TaskType]
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict):
         # This should always be overwritten, as type field determines the subclass
         raise NotImplementedError
 
@@ -124,7 +124,7 @@ class MoveToTask(SingleWaypointTask):
          = MovementSpeedParam.STANDARD
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'MoveToTask':
         assert(data["name"] == str(cls.type))
         return cls(
             description = str(data["description"]),
@@ -153,7 +153,7 @@ class MovePathTask(MultiWaypointTask):
          = MovementSpeedParam.STANDARD
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'MovePathTask':
         assert(data["name"] == str(cls.type))
         wps = list(map(GeoPoint.fromJson, data["params"]["waypoints"]))
         return cls(
@@ -178,7 +178,7 @@ class AUVDepthMoveToTask(SingleWaypointTask):
     waypointClass = AUVWaypoint
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'AUVDepthMoveToTask':
         assert(data["name"] == str(cls.type))
         return cls(
             description = str(data["description"]),
@@ -200,7 +200,7 @@ class AUVDepthMovePathTask(MultiWaypointTask):
     waypointClass = AUVWaypoint
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'AUVDepthMovePathTask':
         assert(data["name"] == str(cls.type))
         wps = list(map(AUVWaypoint.fromJson, data["params"]["waypoints"]))
         return cls(
@@ -227,7 +227,7 @@ class LoiterTask(Task):
            = .0
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'LoiterTask':
         assert(data["name"] == str(cls.type))
         return cls(
             description = str(data["description"]),
@@ -253,7 +253,7 @@ class CustomTask(Task):
            = ""
 
     @classmethod
-    def fromJson(cls, data: dict) -> Self:
+    def fromJson(cls, data: dict) -> 'CustomTask':
         assert(data["name"] == str(cls.type))
         return cls(
             description = str(data["description"]),

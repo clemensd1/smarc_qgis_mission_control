@@ -8,6 +8,7 @@ from qgis.core import *
 from typing import *
 from uuid import UUID
 
+from ..compat import assert_never
 from ..mission.MissionDocument import MissionDocument
 from ..domain.waypoints import Waypoint
 from ..domain.tasks import WaypointTask, SingleWaypointTask, MultiWaypointTask
