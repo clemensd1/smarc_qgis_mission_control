@@ -9,10 +9,17 @@ Supported Ubuntu version(s): 22.04 (Python 3.10)
 1. Install QGIS v3.44 LTR from [qgis.org](https://qgis.org/download)
 
 2. Install the SMaRC Mission Control Plugin
-   - Clone the repository into the QGIS Python library folder:
+   - Option 1: Clone the repository into the QGIS Python library folder:
      - Windows: `C:\Users\<user>\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins`
-     - Ubuntu: `/usr/lib/qgis/plugins`
-   - Download the repository as a zip file and load it via the plugin manager: *Plugins* -> *Manage and install plugins ...* -> *Install from ZIP*
+     - Ubuntu: `.local/share/QGIS/QGIS3/profiles/default/python/plugins/`
+       - `.../plugins` might not exist if this is the very first one you are creating. Create the folder if that is the case.
+   - Option 2: Download the repository as a zip file and load it via the plugin manager: *Plugins* -> *Manage and install plugins ...* -> *Install from ZIP*
+   - Option 3: Pull the submoudle in smarc2 and symlink it to QGIS Python library folder (see Option 1 above)
+     - `cd smarc2`
+     - `git submodule update --remote --init ./external_equipment/qgis/smarc_qgis_misison_control`
+     - `cd .local/share/QGIS/QGIS3/profiles/default/python/plugins/`
+     - `sudo ln -s /path/to/smarc2/external_equipment/qgis/smarc_qgis_misison_control`
+   - **Enable the plugin** : Plugins -> Installed -> Chcek the box for smarc
   
 3. Install other useful plugins via the plugin manager, for example
    -  Plugin Reloader
