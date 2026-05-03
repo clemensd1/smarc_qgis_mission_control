@@ -8,13 +8,13 @@ name=SMaRC Mission Control
 qgisMinimumVersion=3.40
 description=SMaRC Mission Planner, Fleet Control and Live Tracking plugin
 version=0.1
-author=Wiktor Dobrosierdow
-email=
+author=Wiktor Dobrosierdow; Clemens Deutsch*; Niklas Rolleberg; Özer Özkahraman
+email=clemensd@kth.se
 
-about=This plugin provides functionality to plan and upload missions, as well as monitor vehicles and perform basic fleet control.
+about=This plugin provides functionality to plan and upload missions, as well as monitor vehicles and perform basic fleet control. Developed by the Swedish Maritime Robotics Centre for mobile robots that use the WARA-PS API.
 
-tracker=https://github.com/JadedTuna/smarc_qgis_mission_control/issues
-repository=https://github.com/JadedTuna/smarc_qgis_mission_control
+tracker=https://github.com/smarc-project/smarc_qgis_mission_control/issues
+repository=https://github.com/smarc-project/smarc_qgis_mission_control
 # End of mandatory metadata
 
 # Recommended items:
@@ -26,9 +26,10 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=https://github.com/JadedTuna/smarc_qgis_mission_control
+homepage=https://github.com/smarc-project/smarc_qgis_mission_control
 category=Plugins
-# icon=icon.png
+icon=src/ui/svg/smarclogo1.png 
+
 # experimental flag
 experimental=True
 
