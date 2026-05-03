@@ -47,6 +47,7 @@
 }
 
 #VehicleCardWidget[checked=&quot;true&quot;] #vehicleNameLabel,
+#VehicleCardWidget[checked=&quot;true&quot;] #modeLabel,
 #VehicleCardWidget[checked=&quot;true&quot;] #statusLabel,
 #VehicleCardWidget[checked=&quot;true&quot;] #collapseExpandButton {
     color: palette(highlighted-text);
@@ -111,6 +112,13 @@
         </property>
         <property name="text">
          <string>vehicle_name</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="modeLabel">
+        <property name="text">
+         <string>Mode</string>
         </property>
        </widget>
       </item>

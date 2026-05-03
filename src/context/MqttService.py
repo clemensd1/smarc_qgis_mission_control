@@ -24,6 +24,7 @@ class VehicleEvent:
 
 @dataclass
 class VehicleHeartbeatEvent(VehicleEvent):
+    mode: str | None = "Mode"
     pass
 
 @dataclass
@@ -115,6 +116,8 @@ class MqttService(QObject):
             event = VehicleHeartbeatEvent(
                 vehicleTopic = vehicleTopic,
             )
+            event.mode = mode
+            
             print(event)
             self.vehicleHeartbeat.emit(event)
         elif (match := re.match(r'/sensor/([^/]+)$', vehicleSubtopic)) is not None:
