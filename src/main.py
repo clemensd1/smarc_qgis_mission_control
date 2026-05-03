@@ -1,10 +1,10 @@
-from qgis.PyQt import uic
-from qgis.PyQt.QtCore import *
-from qgis.PyQt.QtGui import *
-from qgis.PyQt.QtWidgets import *
-from qgis.gui import *
-from qgis.core import *
 from pathlib import Path
+
+from qgis.PyQt.QtCore import QObject, Qt, QSize, pyqtSlot
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QAction, QDialog, QSizePolicy, QWidget, QMessageBox
+from qgis.gui import QgisInterface
+# from qgis.core import QgsProject
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
@@ -16,21 +16,36 @@ class SMaRCMissionControlPlugin(QObject):
     def __init__(self, iface: QgisInterface):
         super().__init__()
         self.iface = iface
+        self.menu = None
         self.toolbar = None
         self.toolbarSpacer = None
         self.mqttAction = None
+        self.mqttButton = None
         self.missionControlDock = None
         self.missionControlAction = None
+
+        # set path and path to svg files
+        self.plugin_dir = Path(__file__).parent
+        self.smarc_icon_slim = QIcon(
+            str(self.plugin_dir / "ui" / "svg" / "smarclogo-slim.png")
+        )
+        self.smarc_icon = QIcon(
+            str(self.plugin_dir / "ui" / "svg" / "smarclogo1.png")
+        )
 
         self.fleetContext = FleetContext(self)
         self.missionContext = MissionContext(self)
 
         # TODO: this is a hack to easily access the plugin instance
         iface.smarcmcp = self
-
+    
     def initGui(self):
         """Called when the plugin is activated."""
-        self.plugin_dir = Path(__file__).parent
+
+        self.menu = self.iface.pluginMenu().addMenu(
+            self.smarc_icon,
+            "&SMaRC Mission Control",
+        ) # filename to custom icon should not contain special characters
 
         self.toolbar = self.iface.addToolBar("SMaRC Mission Control")
         self.toolbar.setObjectName("SMaRC Mission Control")
@@ -44,57 +59,49 @@ class SMaRCMissionControlPlugin(QObject):
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.missionControlDock)
         self.missionControlDock.hide()
 
-        self.smarc_icon = str(self.plugin_dir / 'ui' / 'svg' / 'smarclogo-liten-rgb.png') # custom smarc logo for plugin button
         self.missionControlAction = self.missionControlDock.toggleViewAction()
         self.missionControlAction.setIcon(
-            QIcon(self.smarc_icon)
+            self.smarc_icon_slim
         )
-
-        self.missionControlAction.setText(self.tr("Open Mission Control"))
+        self.missionControlAction.setText("Open Mission Control")
+        self.menu.addAction(self.missionControlAction)
+        self.menu.addSeparator()
         self.toolbar.addAction(self.missionControlAction)
-
+        
         # Spacer
         self.toolbarSpacer = QWidget(self.iface.mainWindow())
         self.toolbarSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.toolbar.addWidget(self.toolbarSpacer)
 
-        self.mqttAction = QAction(self.tr('MQTT'), self.iface.mainWindow())
+        # Mqtt button
+        self.mqttAction = QAction("MQTT", self.iface.mainWindow())
+        self.mqttAction.setToolTip("Connect to MQTT broker")
         self.mqttAction.triggered.connect(self.onMqttActionClicked)
         self.toolbar.addAction(self.mqttAction)
-
-        # Set color feedback of MQTT button to "disconnected"
-        self.mqtt_button = self.toolbar.widgetForAction(self.mqttAction)
-        if self.mqtt_button:
-            self.mqtt_button.setStyleSheet("""
-                background-color: #f6c7b3;
-                color: black;
-                border-radius: 4px;
-                padding: 4px 10px;
-                font: bold 10px;
-                font-family: Arial;
-            """)
-
-        self.iface.addPluginToMenu("SMaRC Mission Control", self.missionControlAction)
+        self.mqttButton = self.toolbar.widgetForAction(self.mqttAction)
+        self.set_mqtt_button_style(False) # set color feedback of MQTT button to "disconnected"
+        
 
     def unload(self):
         """Called when the plugin is deactivated."""
         self.fleetContext.mqtt.disconnect()
 
         # TODO: can be cleaner
-        qgs = QgsProject.instance()
+        # qgs = QgsProject.instance()
         # for doc in self.missionContext._missionDocuments.values():
         #     qgs.removeMapLayer(doc.layerBridge.waypointLayer)
 
         # qgs.removeMapLayer(self.fleetContext.mapManager._waypointLayer)
 
+        # TODO: move into mapManager (as to not reach into _vehicles here)
+        # TODO: implement self.fleetContext.mapManager.cleanup()
         for vehicle in self.fleetContext.mapManager._vehicles.values():
             self.iface.mapCanvas().scene().removeItem(vehicle.trackRubberBand)
 
-        if self.missionControlAction is not None:
-            self.iface.removePluginMenu(
-                "SMaRC Mission Control", self.missionControlAction
-            )
-            self.missionControlAction = None
+        if self.menu is not None:
+            self.iface.pluginMenu().removeAction(self.menu.menuAction())
+            self.menu.deleteLater()
+            self.menu = None
 
         if self.mqttAction is not None:
             self.mqttAction.deleteLater()
@@ -115,23 +122,47 @@ class SMaRCMissionControlPlugin(QObject):
             self.toolbar.deleteLater()
             self.toolbar = None
 
+        self.missionControlAction = None
+        self.mqttButton = None
         self.iface.smarcmcp = None
 
-    @pyqtSlot(bool)
-    def onMqttActionClicked(self, checked: bool):
-        dialog = MqttConnectionDialog(self.iface.mainWindow())
-        if dialog.exec() != QDialog.Accepted:
+    def set_mqtt_button_style(self, connected: bool):
+        if not self.mqttButton:
             return
 
-        self.fleetContext.mqtt.connect(dialog.ip(), dialog.port(), dialog.username(),
-                                       dialog.password(), dialog.context())
+        background = "#d9ead3" if connected else "#f6c7b3"
 
-        # Set color feedback of MQTT button to "connected"
-        self.mqtt_button.setStyleSheet("""
-            background-color: #d9ead3;
+        self.mqttButton.setStyleSheet(f"""
+            background-color: {background};
             color: black;
             border-radius: 4px;
             padding: 4px 10px;
             font: bold 10px;
             font-family: Arial;
         """)
+
+    @pyqtSlot(bool)
+    def onMqttActionClicked(self, checked: bool):
+        dialog = MqttConnectionDialog(self.iface.mainWindow())
+        if dialog.exec() != QDialog.Accepted:
+            return
+        
+        # TODO: subscribing to certain context other than #
+        try:
+            self.fleetContext.mqtt.connect(
+                dialog.ip(),
+                dialog.port(),
+                dialog.username(),
+                dialog.password(),
+                dialog.context(),
+            )
+        except Exception as e:
+            self.set_mqtt_button_style(False)
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "MQTT connection failed",
+                str(e),
+            )
+            return
+
+        self.set_mqtt_button_style(True)
