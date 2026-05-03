@@ -18,6 +18,9 @@ class VehicleLiveViewWidget(QWidget):
     mapColorChanged = pyqtSignal(str, QColor)
     lookAtRequested = pyqtSignal(str)
 
+    collapsedChanged = pyqtSignal(bool)
+    _collapsed: bool = False
+
     def __init__(self, vehicleTopic: str, parent: QWidget | None = None):
         super().__init__(parent)
 
@@ -43,6 +46,10 @@ class VehicleLiveViewWidget(QWidget):
 
         self.ui.showOnMapCheckBox.toggled.connect(self.onShowOnMapChanged)
         self.ui.mapColorButton.colorChanged.connect(self.onMapColorChanged)
+
+        # Collapse/expand the body contents
+        self.ui.collapseExpandButton.clicked.connect(self.toggleCollapsed)
+        self.setCollapsed(False)
 
     def updateState(self, state: VehicleState):
         if state.latitude is not None:
@@ -105,3 +112,27 @@ class VehicleLiveViewWidget(QWidget):
     @pyqtSlot()
     def onLookAtClicked(self):
         self.lookAtRequested.emit(self._vehicleTopic)
+
+    @pyqtSlot("bool")
+    def setCollapsed(self, value: bool):
+        if self._collapsed == value:
+            return
+
+        self._collapsed = value
+        self.setProperty("expanded", not value)
+
+        if value:
+            self.ui.collapseExpandButton.setArrowType(Qt.RightArrow)
+        else:
+            self.ui.collapseExpandButton.setArrowType(Qt.DownArrow)
+
+        # Visibility is inverse of collapsed
+        self.ui.body.setVisible(not value)
+
+        self.collapsedChanged.emit(value)
+
+    def isCollapsed(self):
+        return self._collapsed
+    
+    def toggleCollapsed(self):
+        self.setCollapsed(not self._collapsed)
