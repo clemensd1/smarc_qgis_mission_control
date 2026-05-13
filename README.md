@@ -35,3 +35,10 @@ Supported Ubuntu version(s): 22.04 (Python 3.10)
    - *Layer* -> *Add Layer ...* -> *Add WMS/WMTS Layer ...*
 
 5. Start betatesting the plugin :-)
+
+## Developer instructions
+
+### UI design
+0. Install PyQt5 via `pip install PyQt5` (or any other way)
+1. Develop UI layout in QtDesigner to generate *.ui files
+2. Produce python files from *.ui files using hte PyQt5 cmd: `pyuic5 --from-imports -o <output.py> <input.ui>`
