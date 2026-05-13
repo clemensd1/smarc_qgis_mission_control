@@ -34,7 +34,7 @@ class VehicleLiveViewWidget(QWidget):
         self.ui.statusLabel.setText('Status')
 
         self.ui.lookAtButton.setIcon(
-            QIcon(":images/themes/default/console/iconSearchEditorConsole.svg")
+            QgsApplication.getThemeIcon("console/iconSearchEditorConsole.svg")
         )
         self.ui.lookAtButton.clicked.connect(self.onLookAtClicked)
 
