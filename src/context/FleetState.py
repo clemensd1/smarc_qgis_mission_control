@@ -22,6 +22,7 @@ class VehicleState:
     speed     : float | None = None
     roll      : float | None = None
     pitch     : float | None = None
+    mode      : str   | None = ""
 
     executingTasks: list[WaraPsExecutingTask] | None = None
 
@@ -59,6 +60,10 @@ class FleetState(QObject):
     @pyqtSlot(VehicleHeartbeatEvent)
     def onVehicleHeartbeat(self, event: VehicleHeartbeatEvent):
         self._ensureVehicle(event.vehicleTopic)
+
+        state = self._vehicles[event.vehicleTopic]
+        state.mode = event.mode
+        
         # TODO: propagate vehicle heartbeat in some way?
 
     @pyqtSlot(VehicleSensorEvent)

@@ -37,6 +37,7 @@ class Ui_VehicleCardWidget(object):
 "}\n"
 "\n"
 "#VehicleCardWidget[checked=\"true\"] #vehicleNameLabel,\n"
+"#VehicleCardWidget[checked=\"true\"] #modeLabel,\n"
 "#VehicleCardWidget[checked=\"true\"] #statusLabel,\n"
 "#VehicleCardWidget[checked=\"true\"] #collapseExpandButton {\n"
 "    color: palette(highlighted-text);\n"
@@ -77,6 +78,9 @@ class Ui_VehicleCardWidget(object):
         self.vehicleNameLabel.setFont(font)
         self.vehicleNameLabel.setObjectName("vehicleNameLabel")
         self.headerHLayout.addWidget(self.vehicleNameLabel)
+        self.modeLabel = QtWidgets.QLabel(self.header)
+        self.modeLabel.setObjectName("modeLabel")
+        self.headerHLayout.addWidget(self.modeLabel)
         spacerItem = QtWidgets.QSpacerItem(242, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.headerHLayout.addItem(spacerItem)
         self.statusLabel = QtWidgets.QLabel(self.header)
@@ -119,4 +123,5 @@ class Ui_VehicleCardWidget(object):
         _translate = QtCore.QCoreApplication.translate
         VehicleCardWidget.setWindowTitle(_translate("VehicleCardWidget", "Frame"))
         self.vehicleNameLabel.setText(_translate("VehicleCardWidget", "vehicle_name"))
+        self.modeLabel.setText(_translate("VehicleCardWidget", "Mode"))
         self.statusLabel.setText(_translate("VehicleCardWidget", "Status"))

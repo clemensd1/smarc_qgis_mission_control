@@ -33,11 +33,11 @@ class VehicleLiveViewWidget(QWidget):
 
     def setup(self):
         self.ui.vehicleNameLabel.setText(self._vehicleTopic.split('/')[-1])
-        self.ui.statusLabel.setText('Online')
+        self.ui.modeLabel.setText('Mode')
+        self.ui.statusLabel.setText('Status')
 
         self.ui.lookAtButton.setIcon(
-            # QgsApplication.getThemeIcon("gpsicons/mActionRecenter.svg")
-            QgsApplication.getThemeIcon("cursors/mCapturePoint.svg")
+            QgsApplication.getThemeIcon("console/iconSearchEditorConsole.svg")
         )
         self.ui.lookAtButton.clicked.connect(self.onLookAtClicked)
 
@@ -52,6 +52,8 @@ class VehicleLiveViewWidget(QWidget):
         self.setCollapsed(False)
 
     def updateState(self, state: VehicleState):
+        self.ui.modeLabel.setText(f'({state.mode:s})')
+
         if state.latitude is not None:
             self.ui.latValueLabel.setText(f'{state.latitude:.5f}°')
         else:
@@ -96,10 +98,13 @@ class VehicleLiveViewWidget(QWidget):
         if state.executingTasks is not None:
             if len(state.executingTasks):
                 self.ui.taskValueLabel.setText(state.executingTasks[0].type)
+                self.ui.statusLabel.setText('Running')
             else:
                 self.ui.taskValueLabel.setText('-')
+                self.ui.statusLabel.setText('Other')
         else:
             self.ui.taskValueLabel.setText('?')
+            self.ui.statusLabel.setText('Idle')
 
     @pyqtSlot(bool)
     def onShowOnMapChanged(self, state: bool):
