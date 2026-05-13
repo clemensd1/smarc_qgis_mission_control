@@ -155,3 +155,4 @@ class FleetMapManager(QObject):
             return
 
         iface.mapCanvas().zoomToFeatureIds(self._waypointLayer, [vehicle.lastFid])
+        iface.mapCanvas().zoomScale(500) # zoom to fixed scale (e.g. 1:500)
