@@ -18,8 +18,17 @@ __all__ = ["MissionMapManager"]
 class MyMapTool(QgsMapTool):
     mapClicked = pyqtSignal(QgsPointXY, Qt.MouseButton)
 
+    def _toWgs84(self, point: QgsPointXY) -> QgsPointXY:
+        """Helper to transform a point from map canvas CRS to EPSG:4326 (required)."""
+        canvas_crs = self.canvas().mapSettings().destinationCrs()
+        wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+        if canvas_crs == wgs84:
+            return point
+        transform = QgsCoordinateTransform(canvas_crs, wgs84, QgsProject.instance())
+        return transform.transform(point)
+    
     def canvasReleaseEvent(self, e: QgsMapMouseEvent):
-        point = self.toMapCoordinates(e.pos())
+        point = self._toWgs84(self.toMapCoordinates(e.pos()))
         if e.button() == Qt.MouseButton.RightButton:
             # Disable self
             ...

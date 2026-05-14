@@ -65,6 +65,13 @@ class MissionLayerBridge(QObject):
         self._populateLayers(plan)
 
     def _initializeLayers(self, planUuid: UUID) -> None:
+        """
+        Important: The default layer CRS for waypoint layers is set to EPSG:4326.
+
+        This default is dictated by the vehicles. No reprojection of coordinates 
+        needed as long as waypoint layer is initialized with EPSG:4326.
+        """
+
         # Setup waypoint layer
         qgs = QgsProject.instance()
         # Remove any stale layers
@@ -73,7 +80,7 @@ class MissionLayerBridge(QObject):
 
         # Setup our layer
         self.waypointLayer = QgsVectorLayer(
-            'point?crs=epsg:4326',
+            'point?crs=epsg:4326', # IMPORTANT: layer crs set to espg:4326
             f'SMaRCMissionWaypoints-{planUuid}',
             'memory'
         )
