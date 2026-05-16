@@ -10,7 +10,6 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-
 class Ui_MqttConnectionDialog(object):
     def setupUi(self, MqttConnectionDialog):
         MqttConnectionDialog.setObjectName("MqttConnectionDialog")
@@ -50,15 +49,22 @@ class Ui_MqttConnectionDialog(object):
         self.lineEditContext.setReadOnly(False)
         self.lineEditContext.setObjectName("lineEditContext")
         self.verticalLayout.addWidget(self.lineEditContext)
-        self.buttonBox = QtWidgets.QDialogButtonBox(MqttConnectionDialog)
-        self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox = QtWidgets.QHBoxLayout()
         self.buttonBox.setObjectName("buttonBox")
-        self.verticalLayout.addWidget(self.buttonBox)
+        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.buttonBox.addItem(spacerItem)
+        self.connectButton = QtWidgets.QPushButton(MqttConnectionDialog)
+        self.connectButton.setObjectName("connectButton")
+        self.buttonBox.addWidget(self.connectButton)
+        self.disconnectButton = QtWidgets.QPushButton(MqttConnectionDialog)
+        self.disconnectButton.setObjectName("disconnectButton")
+        self.buttonBox.addWidget(self.disconnectButton)
+        self.closeButton = QtWidgets.QPushButton(MqttConnectionDialog)
+        self.closeButton.setObjectName("closeButton")
+        self.buttonBox.addWidget(self.closeButton)
+        self.verticalLayout.addLayout(self.buttonBox)
 
         self.retranslateUi(MqttConnectionDialog)
-        self.buttonBox.accepted.connect(MqttConnectionDialog.accept) # type: ignore
-        self.buttonBox.rejected.connect(MqttConnectionDialog.reject) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(MqttConnectionDialog)
 
     def retranslateUi(self, MqttConnectionDialog):
@@ -70,3 +76,6 @@ class Ui_MqttConnectionDialog(object):
         self.lineEditPassword.setPlaceholderText(_translate("MqttConnectionDialog", "Password"))
         self.lineEditContext.setText(_translate("MqttConnectionDialog", "#"))
         self.lineEditContext.setPlaceholderText(_translate("MqttConnectionDialog", "Context"))
+        self.connectButton.setText(_translate("MqttConnectionDialog", "Connect"))
+        self.disconnectButton.setText(_translate("MqttConnectionDialog", "Disconnect"))
+        self.closeButton.setText(_translate("MqttConnectionDialog", "Close"))

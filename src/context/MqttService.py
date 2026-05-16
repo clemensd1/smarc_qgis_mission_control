@@ -79,9 +79,25 @@ class MqttService(QObject):
         self._client.on_message = self.onMqttMessage
 
     def connect(self, ip: str, port: int, username: str | None, password: str | None,
-                context: str, timeout: float = 5):
-        # self.disconnect() # if this is called, self._client -> NoneType
-        self._connected = False
+                context: str, timeout: float = 5):        
+        # Cleanly close any existing connections first
+        if self._client is not None:
+            self._client.loop_stop()
+        try:
+            self._client.disconnect() # if this is called, self._client -> NoneType
+        except Exception:
+            pass
+        self._client = None
+
+        print("Connecting to MQTT...")
+
+        # Always create a fresh client
+        self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        self._client.on_connect = self.onMqttConnect
+        self._client.on_connect_fail = self.onMqttConnectFail
+        self._client.on_disconnect = self.onMqttDisconnect
+        self._client.on_message = self.onMqttMessage
+
         self._connect_rc = None
         self._connect_event.clear()
         self._context = context
@@ -92,6 +108,7 @@ class MqttService(QObject):
         try:
             # self._client.connect_async(ip, port)
             self._client.connect(ip, port, keepalive=60)
+            self._connected = True
         except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as e:
             self._connected = False
             self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
@@ -108,11 +125,15 @@ class MqttService(QObject):
             raise ConnectionError(f"MQTT connection rejected: {self._connect_rc}")
 
     def disconnect(self):
+        print("Disconnecting from MQTT...")
         if self._client is None:
             return
-
+        
         try:
             self._client.disconnect()
+            self._connected = False
+        except Exception:
+            pass
         finally:
             self._client.loop_stop()
             self._client = None

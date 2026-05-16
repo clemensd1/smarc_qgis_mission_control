@@ -144,18 +144,15 @@ class SMaRCMissionControlPlugin(QObject):
     @pyqtSlot(bool)
     def onMqttActionClicked(self, checked: bool):
         dialog = MqttConnectionDialog(self.iface.mainWindow())
-        if dialog.exec() != QDialog.Accepted:
-            return
-        
-        # TODO: subscribing to certain context other than #
+        dialog.connectRequested.connect(self._onMqttConnect)
+        dialog.disconnectRequested.connect(self._onMqttDisconnect)
+        dialog.exec()
+
+    def _onMqttConnect(self, ip, port, user, pw, ctx):
         try:
-            self.fleetContext.mqtt.connect(
-                dialog.ip(),
-                dialog.port(),
-                dialog.username(),
-                dialog.password(),
-                dialog.context(),
-            )
+            # TODO: subscribing to certain context other than #
+            self.fleetContext.mqtt.connect(ip, port, user, pw, ctx)
+            self.set_mqtt_button_style(self.fleetContext.mqtt._connected)
         except Exception as e:
             self.set_mqtt_button_style(False)
             QMessageBox.warning(
@@ -165,4 +162,6 @@ class SMaRCMissionControlPlugin(QObject):
             )
             return
 
-        self.set_mqtt_button_style(True)
+    def _onMqttDisconnect(self):
+        self.fleetContext.mqtt.disconnect()
+        self.set_mqtt_button_style(self.fleetContext.mqtt._connected)
