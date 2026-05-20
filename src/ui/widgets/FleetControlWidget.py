@@ -21,10 +21,11 @@ class FleetControlWidget(QFrame):
     abortMissionRequested = pyqtSignal(set)
     emergencyRequested = pyqtSignal(set)
 
-    def __init__(self, fleetState: FleetState, parent: QWidget | None = None):
+    def __init__(self, fleetState: FleetState, mapManager, parent: QWidget | None = None):
         super().__init__(parent)
 
         self._fleetState = fleetState
+        self._mapManager = mapManager
 
         self._selected: set[str] = set()
         self._collapsed: set[str] = set()
@@ -71,6 +72,9 @@ class FleetControlWidget(QFrame):
         self.ui.continueButton.clicked.connect(self.onContinueClicked)
         self.ui.abortMissionButton.clicked.connect(self.onAbortMissionButtonClicked)
         self.ui.emergencyButton.clicked.connect(self.onEmergencyButtonClicked)
+
+        # Heartbeat
+        self._fleetState.vehicleHeartbeat.connect(self.onVehicleHeartbeat)
 
         # By default, keep Vehicle Control disabled
         self.ui.vehicleControls.setEnabled(False)
@@ -202,6 +206,9 @@ class FleetControlWidget(QFrame):
             lambda v: self.onVehicleCollapsedChanged(vehicle, v)
         )
 
+        # lookAt connection
+        card.lookAtRequested.connect(self._mapManager.onLookAtRequested)
+
         self.ui.vehicleListVLayout.addWidget(card)
         self._vehicles[vehicle] = card
 
@@ -216,3 +223,8 @@ class FleetControlWidget(QFrame):
     @pyqtSlot(str)
     def onVehicleExpired(self, vehicleTopic: str):
         ...
+
+    @pyqtSlot(str)
+    def onVehicleHeartbeat(self, vehicleTopic: str):
+        if vehicleTopic in self._vehicles:
+            self._vehicles[vehicleTopic].onHeartbeat()

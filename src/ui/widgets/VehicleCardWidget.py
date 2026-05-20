@@ -15,6 +15,7 @@ from dataclasses import dataclass
 class VehicleCardWidget(QWidget):
     toggled = pyqtSignal(bool)
     collapsedChanged = pyqtSignal(bool)
+    lookAtRequested = pyqtSignal(str)
 
     _checked: bool = False
     _collapsed: bool = False
@@ -65,6 +66,18 @@ class VehicleCardWidget(QWidget):
         # self.ui.taskList.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         # self.ui.taskList.verticalHeader().setDefaultAlignment(Qt.AlignRight)
         # self.ui.taskList.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+
+        # custom heartbeat
+        self.heartbeat_gif = QMovie(":/custom_icons/heartbeat.gif")  # if using Qt resources
+        self.ui.gifLabel.setFixedSize(32, 32)
+        self.heartbeat_gif.setScaledSize(QSize(32, 32))
+        self.ui.gifLabel.setMovie(self.heartbeat_gif)
+
+        # look-at button
+        self.ui.lookAtButton.setIcon(
+            QgsApplication.getThemeIcon("console/iconSearchEditorConsole.svg")
+        )
+        self.ui.lookAtButton.clicked.connect(self.onLookAtClicked)
 
     def isChecked(self):
         return self._checked
@@ -119,4 +132,24 @@ class VehicleCardWidget(QWidget):
         self.setStyleSheet(self.styleSheet())
 
     def updateState(self, state: VehicleState):
+        self.ui.modeLabel.setText(f'({state.mode:s})')
+
         self._taskListModel.setItems(state.executingTasks)
+
+        if state.executingTasks is not None:
+            if len(state.executingTasks):
+                self.ui.statusLabel.setText('Running')
+            else:
+                self.ui.statusLabel.setText('Idle')
+        else:
+            self.ui.statusLabel.setText('Other')
+
+    @pyqtSlot()
+    def onHeartbeat(self):
+        self.heartbeat_gif.stop()
+        self.heartbeat_gif.jumpToFrame(0)
+        self.heartbeat_gif.start()
+
+    @pyqtSlot()
+    def onLookAtClicked(self):
+        self.lookAtRequested.emit(self._name)

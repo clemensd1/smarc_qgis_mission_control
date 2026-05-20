@@ -40,6 +40,7 @@ class MissionControlDockWidget(QgsDockWidget):
 
         self.ui.tabFleetControl = FleetControlWidget(
             self._fleetContext.state,
+            self._fleetContext.mapManager, # for having access to FleetMapManager.onLookAtRequest() from FleetControlWidget
             self.ui.tabWidget
         )
         # TODO: cleanup

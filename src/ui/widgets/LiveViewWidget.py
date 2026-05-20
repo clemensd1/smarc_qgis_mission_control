@@ -79,8 +79,9 @@ class LiveViewWidget(QWidget):
             vehicle.setCollapsed(False)
 
     def clearTracks(self):
-        for vehicle in self._vehicles.values():
-            print("Clearing tracks...")
+        print("Clearing tracks...")
+        self._fleetContext.mapManager.clearAllVehicleMarkers()
+        # for vehicle in self._vehicles.values():
 
     def onVehicleToggled(self, vehicle: str, value: bool):
         print("LiveViewWidget.onVehicleToggled() called")
