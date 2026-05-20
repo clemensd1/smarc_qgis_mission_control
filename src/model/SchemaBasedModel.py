@@ -47,9 +47,19 @@ class SchemaBasedModel(ItemBasedModel):
             return False
 
         item = self._items[index.row()]
-        spec = self._schema.fields[index.column()]
 
-        spec.setValue(item, value)
+        # retrieve the field specification for schema object
+        spec = self._schema.fields[index.column()]
+        # retrieve original value (->type)
+        original = spec.value(item)
+
+        # cast the incoming object to the original type
+        try:
+            typed_value = type(original)(value)
+        except (ValueError, TypeError):
+            return False  # reject invalid input
+
+        spec.setValue(item, typed_value)
         # TODO: or [role]?
         self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
 
