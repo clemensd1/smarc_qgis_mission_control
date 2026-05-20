@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from qgis.PyQt.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 from qgis.PyQt.QtGui import QColor
 from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsField, \
-    QgsPointXY, QgsCategorizedSymbolRenderer, QgsApplication, QgsSymbol, \
-    QgsRendererCategory
+    QgsPointXY, QgsCategorizedSymbolRenderer, QgsSymbol, QgsUnitTypes, QgsProperty, \
+    QgsRendererCategory, QgsMarkerSymbol, QgsSymbolLayer, QgsSvgMarkerSymbolLayer
 from qgis.gui import QgsRubberBand
 from qgis.utils import iface
 
@@ -65,6 +65,39 @@ class FleetMapManager(QObject):
 
         qgs.addMapLayer(self._waypointLayer)
 
+    def _createVehicleSymbol(self, vehicleTopic: str, color: QColor) -> QgsMarkerSymbol:
+        # Pick icon by vehicle type encoded in the topic
+        if '/subsurface/' in vehicleTopic:
+            svg = ':/custom_icons/auv_marker.svg'
+        elif '/surface/' in vehicleTopic:
+            svg = ':/custom_icons/usv_marker.svg'
+        elif '/air/' in vehicleTopic:
+            svg = ':/custom_icons/uav_marker.svg'
+        else:
+            svg = ':/custom_icons/vehicle_marker.svg'
+
+        symbol = QgsMarkerSymbol()
+        symbol.deleteSymbolLayer(0)  # remove default circle
+
+        svg_layer = QgsSvgMarkerSymbolLayer(svg)
+        svg_layer.setSize(8)
+        svg_layer.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+        svg_layer.setFillColor(color)
+        svg_layer.setStrokeColor(color.darker(150))
+        svg_layer.setStrokeWidth(0.2)
+
+        # Rotate marker by the heading field value
+        svg_layer.setDataDefinedProperty(
+            QgsSymbolLayer.PropertyAngle,
+            QgsProperty.fromField('heading')
+        )
+
+        # Keep marker size fixed regardless of map zoom
+        symbol.setScaleMethod(QgsSymbol.ScaleArea)
+        symbol.appendSymbolLayer(svg_layer)
+
+        return symbol
+
     @pyqtSlot(str)
     def onVehicleDiscovered(self, vehicleTopic: str):
         if vehicleTopic not in self._vehicles:
@@ -73,8 +106,8 @@ class FleetMapManager(QObject):
 
             state = self._fleetState.vehicleState(vehicleTopic)
             assert(state)
-            symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType())
-            symbol.setColor(state.mapColor)
+            
+            symbol = self._createVehicleSymbol(vehicleTopic, state.mapColor)
 
             category = QgsRendererCategory(vehicleTopic, symbol, vehicleTopic, True) # default render state off/false
             self._waypointLayer.renderer().addCategory(category)
@@ -138,8 +171,9 @@ class FleetMapManager(QObject):
             # TODO: should this be logged?
             return
 
-        symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType())
-        symbol.setColor(color)
+        # symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType()) # old
+        # symbol.setColor(color) # old
+        symbol = self._createVehicleSymbol(vehicleTopic, color)
 
         state = self._fleetState.vehicleState(vehicleTopic)
         if state is not None:
@@ -155,4 +189,16 @@ class FleetMapManager(QObject):
             return
 
         iface.mapCanvas().zoomToFeatureIds(self._waypointLayer, [vehicle.lastFid])
-        iface.mapCanvas().zoomScale(500) # zoom to fixed scale (e.g. 1:500)
+        iface.mapCanvas().zoomScale(25000) # zoom to fixed scale (e.g. 1:500)
+
+    def clearAllVehicleMarkers(self):
+        # Clear all features from the vector layer
+        self._waypointLayer.dataProvider().truncate()
+        self._waypointLayer.triggerRepaint()
+
+        # Clear all rubber band tracks and reset vehicle positions
+        for vehicle in self._vehicles.values():
+            vehicle.trackRubberBand.reset()
+            vehicle.lastLatitude = None
+            vehicle.lastLongitude = None
+            vehicle.lastFid = None
