@@ -128,7 +128,6 @@ class MqttService(QObject):
         print("Disconnecting from MQTT...")
         if self._client is None:
             return
-        
         try:
             self._client.disconnect()
             self._connected = False
