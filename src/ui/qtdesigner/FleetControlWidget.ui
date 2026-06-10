@@ -151,7 +151,7 @@
         <x>0</x>
         <y>0</y>
         <width>573</width>
-        <height>645</height>
+        <height>640</height>
        </rect>
       </property>
       <property name="layoutDirection">
@@ -311,22 +311,58 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="emergencyButton">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">:enabled {
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QPushButton" name="emergencyButton">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>2</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="toolTip">
+           <string>Emergency</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">:enabled {
   background-color: #880808;
   color: white;
   font-weight: bold;
 }
-</string>
-        </property>
-        <property name="text">
-         <string>EMERGENCY</string>
-        </property>
-       </widget>
+            </string>
+          </property>
+          <property name="text">
+           <string>EMERGENCY</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="cancelAbortButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="toolTip">
+           <string>Cancel &quot;abort&quot;</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">:enabled {
+  background-color: #d4edda;
+  color: black;
+  font-weight: bold;
+}</string>
+          </property>
+          <property name="text">
+           <string>cancelAbort</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
@@ -342,7 +378,6 @@
   <tabstop>skipTaskButton</tabstop>
   <tabstop>pauseButton</tabstop>
   <tabstop>abortMissionButton</tabstop>
-  <tabstop>emergencyButton</tabstop>
  </tabstops>
  <resources>
   <include location="resources.qrc"/>
