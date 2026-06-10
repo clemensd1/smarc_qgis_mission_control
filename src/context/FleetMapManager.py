@@ -76,6 +76,9 @@ class FleetMapManager(QObject):
         elif '/air/' in vehicleTopic:
             svg = ':/custom_icons/uav_marker.svg' # can be improved!
             size = 10
+        elif '/command/' in vehicleTopic:
+            svg = ':/custom_icons/vehicle_marker.svg'
+            size = 4
         else:
             svg = ':/custom_icons/vehicle_marker.svg'
             size = 4

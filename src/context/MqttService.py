@@ -60,7 +60,7 @@ class MqttService(QObject):
     _connected: bool
 
     mqttTopicPattern = re.compile(
-        r'([^/]+)/unit/(air|surface|subsurface)/(real|simulation)/([^/]+)(/.+)$'
+        r'([^/]+)/unit/(air|surface|subsurface|command)/(real|simulation|command)/([^/]+)(/.+)$'
     )
 
     def __init__(self, parent: QObject | None):
