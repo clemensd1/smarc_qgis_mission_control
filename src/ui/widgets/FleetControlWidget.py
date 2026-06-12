@@ -16,7 +16,7 @@ ABORT_MISSION_BUTTON_CLICKS_REQUIRED = 3
 
 class FleetControlWidget(QFrame):
     uploadMissionPlanRequested = pyqtSignal(set)
-    skipTaskRequested = pyqtSignal(set)
+    skipTaskRequested = pyqtSignal(dict) # dict[str, UUID]: vehicleTopic → first task UUID
     pauseRequested = pyqtSignal(set)
     continueRequested = pyqtSignal(set)
     abortMissionRequested = pyqtSignal(set)
@@ -157,7 +157,13 @@ class FleetControlWidget(QFrame):
 
     @pyqtSlot()
     def onSkipTaskClicked(self):
-        self.skipTaskRequested.emit(self._selected)
+        targets: dict[str, UUID] = {}
+        for vehicleTopic in self._selected:
+            state = self._fleetState.vehicleState(vehicleTopic)
+            if state is not None and state.executingTasks: # send skipTask signal only if task(s) running
+                targets[vehicleTopic] = state.executingTasks[0].uuid
+        if targets:
+            self.skipTaskRequested.emit(targets)
 
     @pyqtSlot()
     def onPauseClicked(self):

@@ -292,24 +292,23 @@ class MqttService(QObject):
         self._client.publish(topic, json.dumps(data))
 
     @pyqtSlot(set)
-    def onSkipTaskSignal(self, vehicleTopics: set[str]):
+    def onSkipTaskSignal(self, targets: dict):
         if self._client is None:
             # TODO
             return
-        for vehicleTopic in vehicleTopics:
-            self.publishSkipTaskSignal(vehicleTopic)
+        for vehicleTopic, taskUuid in targets.items():
+            self.publishSkipTaskSignal(vehicleTopic, taskUuid)
 
-    def publishSkipTaskSignal(self, vehicleTopic: str):
+    def publishSkipTaskSignal(self, vehicleTopic: str, taskUuid: UUID):
         if self._client is None:
             # TODO
             return
-        topic = f'{vehicleTopic}/tst/command'
+        topic = f'{vehicleTopic}/exec/command'
         receiver = vehicleTopic.split('/')[-1]
-        data = { # TODO: currently performs the same action as abortMission!
-            'receiver': receiver,
+        data = {
             'signal': '$enough',
-            'unit': f'/{receiver}',
-            'command': 'signal-unit',
+            'task-uuid': str(taskUuid),
+            'command': 'signal-task',
             'com-uuid': str(uuid4()),
             'sender': 'QGIS-MissionControl',
         }
