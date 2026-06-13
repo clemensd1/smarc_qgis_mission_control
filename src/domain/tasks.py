@@ -32,6 +32,8 @@ class TaskType(StrEnum):
     LOITER              = "loiter"
     # DEPLOY_PAYLOAD  = "deploy-payload"
     CUSTOM              = "custom-task"
+    DEPLOY_PAYLOAD      = "deploy"
+    DEPLOY_PAYLOAD_AT   = "deploy-at"
     
     # Geofence tasks
     SMARC_START_GEOFENCE = "smarc-start-geofence"
@@ -49,13 +51,12 @@ class TaskType(StrEnum):
     # GIMBAL_TRACK_IMG_POI = "gimbal-track-img-poi"
     # GIMBAL_TRACK_ODOM_POI = "gimbal-track-odom-poi"
 
-
-
     # Alars tasks
     ALARS_TAKEOFF = "alars-takeoff"
     ALARS_LAND    = "alars-land"
     ALARS_TAKE_CONTROL = "alars-take-control"
     ALARS_RELEASE_CONTROL = "alars-release-control"
+
     # Requries handling of multiple wps not in a list, so not supported for now
     ALARS_BT = "alars-bt"
     ALARS_SEARCH = "alars-search"
@@ -376,7 +377,6 @@ class SmarcStopGeofenceTask(Task):
                 "reset_islands": self.reset_islands,
             }
         }
-    
 
 @TaskRegistry.register
 @dataclass
@@ -698,5 +698,63 @@ class AlarsFollowAUVTask(Task):
                 "follow_altitude": self.follow_altitude,
                 "vulture_radius": self.vulture_radius,
                 "vulture_speed_deg": self.vulture_speed_deg,
+            }
+        }
+    
+@TaskRegistry.register
+@dataclass
+class DeployPayloadTask(Task):
+    type = TaskType.DEPLOY_PAYLOAD
+
+    # Task parameters
+    payload: Annotated[str, Column("Payload")] \
+        = ""
+    
+    @classmethod
+    def fromJson(cls, data: dict) -> 'DeployPayloadTask':
+        assert(data["name"] == str(cls.type))
+        return cls(
+            description = str(data["description"]),
+            uuid = UUID(data["task-uuid"]),
+            payload = str(data["params"]["payload"]),
+        )
+
+    def toJson(self) -> dict:
+        return super().toJson() | {
+            "params": {
+                "unit": str(self.payload)
+            }
+        }
+    
+@TaskRegistry.register
+@dataclass
+class DeployPayloadAtTask(SingleWaypointTask):
+    type          = TaskType.DEPLOY_PAYLOAD_AT
+    waypointClass = GeoPoint
+
+    # Task Parameters
+    #: Speed as specified in WARA-PS
+    speed: Annotated[MovementSpeedParam, Column("Speed")] \
+        = MovementSpeedParam.STANDARD
+    payload: Annotated[str, Column("Payload")] \
+        = ""
+
+    @classmethod
+    def fromJson(cls, data: dict) -> 'DeployPayloadAtTask':
+        assert(data["name"] == str(cls.type))
+        return cls(
+            description = str(data["description"]),
+            uuid = UUID(data["task-uuid"]),
+            waypoint = GeoPoint.fromJson(data["params"]["waypoint"]),
+            speed = MovementSpeedParam(data["params"]["speed"]),
+            payload = str(data["params"]["payload"]),
+        )
+
+    def toJson(self) -> dict:
+        return super().toJson() | {
+            "params": {
+                "speed": str(self.speed),
+                "waypoint": self.waypoint.toJson(),
+                "unit": str(self.payload)
             }
         }
