@@ -40,7 +40,8 @@ class AutomaticFormWidget(QWidget):
 
             if issubclass(spec.type(), Enum):
                 self._mapper.addMapping(field, col, b"currentText")
-                field.editTextChanged.connect(self._mapper.submit)
+                # field.editTextChanged.connect(self._mapper.submit) # connects on field change (not suitable for manual keyboard input)
+                field.lineEdit().editingFinished.connect(self._mapper.submit) # connects on fiel change (enter/focus out)
             else:
                 self._mapper.addMapping(field, col)
 
