@@ -6,7 +6,7 @@ from .ItemBasedModel import ItemBasedModel
 
 __all__ = ["SchemaBasedModel"]
 
-class SchemaBasedModel(ItemBasedModel):
+class SchemaBasedModel(ItemBasedModel): # TODO: integrate with undo/redo stack
     _schema: Schema
     _longHeaders: bool
 
@@ -47,9 +47,19 @@ class SchemaBasedModel(ItemBasedModel):
             return False
 
         item = self._items[index.row()]
-        spec = self._schema.fields[index.column()]
 
-        spec.setValue(item, value)
+        # retrieve the field specification for schema object
+        spec = self._schema.fields[index.column()]
+        # retrieve original value (->type)
+        original = spec.value(item)
+
+        # cast the incoming object to the original type # TODO: move type checks to MissionDocument after undo/redo stack implementation
+        try:
+            typed_value = spec.type()(value) # instead of type(original)(value)
+        except (ValueError, TypeError):
+            return False  # reject invalid input
+
+        spec.setValue(item, typed_value)
         # TODO: or [role]?
         self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
 
