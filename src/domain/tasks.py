@@ -23,14 +23,13 @@ class TaskType(StrEnum):
     # WARA-PS
     MOVE_TO     = "move-to"
     MOVE_PATH   = "move-path"
-    # SEARCH_AREA = "search-area"
+    SEARCH_AREA = "search-area"
 
     # Custom tasks
     AUV_DEPTH_MOVE_TO   = "auv-depth-move-to"
     AUV_DEPTH_MOVE_PATH = "auv-depth-move-path"
     # AUV_SPIRAL_TO_DEPTH = "auv-spiral-to-depth"
     LOITER              = "loiter"
-    # DEPLOY_PAYLOAD  = "deploy-payload"
     CUSTOM              = "custom-task"
     DEPLOY_PAYLOAD      = "deploy"
     DEPLOY_PAYLOAD_AT   = "deploy-at"
@@ -832,4 +831,48 @@ class SmarcStopModemPingTask(Task):
     def toJson(self) -> dict:
         return super().toJson() | {
             "params": {}
+        }
+
+@TaskRegistry.register
+@dataclass
+class SearchAreaTask(MultiWaypointTask):
+    type          = TaskType.SEARCH_AREA
+    waypointClass = GeoPoint
+
+    speed: Annotated[MovementSpeedParam, Column("Speed")] \
+         = MovementSpeedParam.STANDARD
+    
+    area_type: Annotated[str, Column("Area type")] \
+         = ""
+    
+    target_type: Annotated[str, Column("Target type")] \
+         = ""
+
+    target_size: Annotated[float, Column("Target size")] \
+         = 0.0   
+
+
+    @classmethod
+    def fromJson(cls, data: dict) -> 'SearchAreaTask':
+        assert(data["name"] == str(cls.type))
+        # wps = list(map(GeoPoint.fromJson, data["params"]["waypoints"]))
+        return cls(
+            description = str(data["description"]),
+            uuid        = UUID(data["task-uuid"]),
+            area        = GeoPoint.fromJson(data["params"]["waypoints"]),
+            speed       = MovementSpeedParam(data["params"]["speed"]),
+            area_type   = str(data["params"]["area_type"]),
+            target_type = str(data["params"]["target_type"]),
+            target_size = float(data["params"]["target_size"]),
+        )
+
+    def toJson(self) -> dict:
+        return super().toJson() | {
+            "params": {
+                "area": [w.toJson() for w in self.waypoints],
+                "speed":       str(self.speed),
+                "area_type":   str(self.area_type),
+                "target_type": str(self.target_type),
+                "target_size": float(self.target_size),
+            }
         }
