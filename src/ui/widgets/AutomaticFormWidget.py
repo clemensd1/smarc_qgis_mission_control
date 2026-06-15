@@ -17,12 +17,13 @@ class AutomaticFormWidget(QWidget):
 
         self._mapper = QDataWidgetMapper()
         self._mapper.setModel(model)
-        self._mapper.setSubmitPolicy(QDataWidgetMapper.AutoSubmit)
+        # set to ManualSubmit in attempt to support field changes on Ubuntu and Windows
+        self._mapper.setSubmitPolicy(QDataWidgetMapper.ManualSubmit) # AutoSubmit vs ManualSubmit: https://doc.qt.io/qt-5/qdatawidgetmapper.html#submitPolicy-prop
 
         self._formLayout: QFormLayout|None = None
 
     def buildForm(self, form: QWidget):
-        # Should never rebuild
+        # Should never rebuild ??? what does that mean?
         assert(self._formLayout is None)
 
         self._formLayout = QFormLayout(form)
@@ -38,12 +39,15 @@ class AutomaticFormWidget(QWidget):
             field = self.createEditorWidget(form, spec.type())
             self._formLayout.setWidget(col, QFormLayout.FieldRole, field)
 
-            if issubclass(spec.type(), Enum):
+            if issubclass(spec.type(), Enum): # field is Enum, here: QComboBox
                 self._mapper.addMapping(field, col, b"currentText")
+                # QComboBox does not have editingFinished signal, unlike QLineEdit
                 # field.editTextChanged.connect(self._mapper.submit) # connects on field change (not suitable for manual keyboard input)
-                field.lineEdit().editingFinished.connect(self._mapper.submit) # connects on fiel change (enter/focus out)
+                field.lineEdit().editingFinished.connect(self._mapper.submit) # connect on field change (enter/focus out)
             else:
                 self._mapper.addMapping(field, col)
+                if isinstance(field, QLineEdit): # field is QLineEdit
+                    field.editingFinished.connect(self._mapper.submit) 
 
         self._mapper.toFirst()
 
