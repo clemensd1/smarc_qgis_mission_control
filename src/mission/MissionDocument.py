@@ -29,7 +29,7 @@ class MissionDocument(QObject):
     missionChanged = pyqtSignal()
 
     beforeTaskAdded = pyqtSignal(UUID, int)
-    taskAdded = pyqtSignal(UUID)
+    taskAdded = pyqtSignal(UUID, int)
     beforeTaskDeleted = pyqtSignal(UUID)
     taskDeleted = pyqtSignal(UUID, int)
     # TODO: not very precise
@@ -150,9 +150,13 @@ class MissionDocument(QObject):
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
     def _addTaskAt(self, task: Task, index: int):
+        self.beforeTaskAdded.emit(task.uuid, index)
+
         self.plan.tasks.insert(index, task)
         self.index.registerTask(task)
         self.taskListModified.emit()
+
+        self.taskAdded.emit(task.uuid, index)
 
     def deleteTaskAt(self, index: int):
         try:

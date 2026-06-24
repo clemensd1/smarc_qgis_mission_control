@@ -53,6 +53,7 @@ class MissionPlanWidget(QWidget):
             self.onTaskSelectionChanged(None, None)
 
         self._missionContext.taskListModified.connect(resetTaskList)
+        self._missionContext.taskAdded.connect(self.onTaskAdded)
 
         # Setup icons for the task buttons
         self.ui.buttonAddTask.setIcon(QgsApplication.getThemeIcon("symbologyAdd.svg"))
@@ -67,8 +68,8 @@ class MissionPlanWidget(QWidget):
         )
 
         # Setup event handling for task buttons
-        self.ui.buttonAddTask.clicked.connect(self.onAddTask)
-        self.ui.buttonRemoveTask.clicked.connect(self.onRemoveTask)
+        self.ui.buttonAddTask.clicked.connect(self.onAddTaskClicked)
+        self.ui.buttonRemoveTask.clicked.connect(self.onRemoveTaskClicked)
 
         # Setup the task table
         self.ui.taskList.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -132,7 +133,7 @@ class MissionPlanWidget(QWidget):
             self.activateEditorForTask(task)
 
     @pyqtSlot()
-    def onAddTask(self):
+    def onAddTaskClicked(self):
         doc = self._missionContext.activeDocument()
         if doc is None:
             # TODO: invalid mapping
@@ -145,7 +146,7 @@ class MissionPlanWidget(QWidget):
         doc.addTask(dialog.type(), dialog.description())
 
     @pyqtSlot()
-    def onRemoveTask(self):
+    def onRemoveTaskClicked(self):
         doc = self._missionContext.activeDocument()
         if doc is None:
             # TODO: invalid mapping
@@ -155,6 +156,12 @@ class MissionPlanWidget(QWidget):
         for row in rows:
             index = rows[0].row()
             doc.deleteTaskAt(index)
+
+    @pyqtSlot(UUID, int)
+    def onTaskAdded(self, taskUuid: UUID, row: int):
+        index = self.taskListModel.index(row, 0)
+        self.ui.taskList.setCurrentIndex(index)
+        self.ui.taskList.scrollTo(index)
 
     def activateEditorForTask(self, task):
         if task is None:

@@ -22,6 +22,8 @@ class MissionContext(QObject):
     editingStarted = pyqtSignal()
     editingFinished = pyqtSignal()
 
+    beforeTaskAdded = pyqtSignal(UUID, int)
+    taskAdded = pyqtSignal(UUID, int)
     taskListModified = pyqtSignal()
 
     _missionDocuments: dict[UUID, MissionDocument]
@@ -41,12 +43,16 @@ class MissionContext(QObject):
         doc.editingStarted.disconnect(self.editingStarted)
         doc.editingFinished.disconnect(self.editingFinished)
         doc.taskListModified.disconnect(self.taskListModified)
+        doc.beforeTaskAdded.disconnect(self.beforeTaskAdded)
+        doc.taskAdded.disconnect(self.taskAdded)
 
     def _bindDocument(self, doc: MissionDocument):
         doc.editModeChanged.connect(self.editModeChanged)
         doc.editingStarted.connect(self.editingStarted)
         doc.editingFinished.connect(self.editingFinished)
         doc.taskListModified.connect(self.taskListModified)
+        doc.beforeTaskAdded.connect(self.beforeTaskAdded)
+        doc.taskAdded.connect(self.taskAdded)
 
     def activeDocument(self) -> MissionDocument | None:
         if self._activeDocument is None:
