@@ -42,8 +42,10 @@ class WaypointTableWidget(QWidget):
     def setup(self):
         # Model setup
         self.ui.waypointTable.setModel(self._model)
-        # self.ui.waypointTable.selectionModel().selectionChanged.connect(
-        #     self.onWaypointSelected)
+        self.ui.waypointTable.selectionModel().selectionChanged.connect(
+            self.onWaypointSelectionChanged)
+        # Ensure correct state for buttons
+        self.onWaypointSelectionChanged(None, None)
 
         # Respect edit mode
         self._missionContext.editModeChanged.connect(
@@ -82,6 +84,7 @@ class WaypointTableWidget(QWidget):
         self.ui.buttonRemoveWaypoint.setIcon(
             QgsApplication.getThemeIcon('symbologyRemove.svg')
         )
+        self.ui.buttonRemoveWaypoint.clicked.connect(self.onRemoveWaypointClicked)
         # Button "Move Waypoint"
         self.ui.buttonMoveWaypoint.setIcon(
             QgsApplication.getThemeIcon('mActionPanTo.svg')
@@ -101,6 +104,20 @@ class WaypointTableWidget(QWidget):
     def unbind(self):
         self._model.unbind()
 
+    @pyqtSlot(QItemSelection, QItemSelection)
+    def onWaypointSelectionChanged(self, selected: QItemSelection | None,
+                               deselected: QItemSelection | None) -> None:
+        sel = self.ui.waypointTable.selectionModel()
+        rows = sel.selectedRows()
+
+        # Enable/disable waypoint table buttons as needed
+        self.ui.buttonRemoveWaypoint.setEnabled(bool(rows))
+        self.ui.buttonMoveWaypoint.setEnabled(len(rows) == 1)
+        # TODO
+        # self.ui.buttonMoveWaypointUp.setEnabled(bool(rows) and rows[0].row() > 0)
+        # self.ui.buttonMoveWaypointDown.setEnabled(bool(rows) \
+        #     and rows[-1].row() < len(self._model.items()) - 1)
+
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool):
         self._model.setEditable(editMode)
@@ -116,10 +133,17 @@ class WaypointTableWidget(QWidget):
             state
         )
 
+    @pyqtSlot()
+    def onRemoveWaypointClicked(self) -> None:
+        sel = self.ui.waypointTable.selectionModel()
+        indexes = sel.selectedRows()
+        self._model.deleteWaypointsAtRows([index.row() for index in indexes])
+
     @pyqtSlot(bool)
     def onSelectLocationToggled(self, state: bool):
         self.selectLocationRequested.emit(
             self.ui.buttonMoveWaypoint.defaultAction(),
+            # TODO: not index 0, check selection
             self._model.item(0).uuid,
             state
         )

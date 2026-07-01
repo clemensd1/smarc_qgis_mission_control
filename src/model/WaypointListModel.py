@@ -185,3 +185,21 @@ class WaypointListModel(SchemaBasedModel):
             return
 
         self.endRemoveRows()
+
+    def deleteWaypointsAtRows(self, rows: list[int]):
+        if self._doc is None or self._task is None:
+            return
+
+        if not self.isEditable():
+            return
+
+        if not isinstance(self._task, MultiWaypointTask):
+            return
+
+        # Validate row indexes
+        for row in rows:
+            if row < 0 or row >= self.rowCount():
+                return
+
+        uuids = [self.item(row).uuid for row in rows]
+        self._doc.deleteWaypoints(uuids)

@@ -263,6 +263,15 @@ class MissionDocument(QObject):
             self._keepalive_undo.append(cmd)
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
+    def deleteWaypoints(self, waypointUuids: list[UUID]):
+        if len(waypointUuids) == 1:
+            self.deleteWaypoint(waypointUuids[0])
+            return
+
+        with self.layerBridge.customEditCommand("Delete waypoints"):
+            for waypointUuid in waypointUuids:
+                self.deleteWaypoint(waypointUuid)
+
     def _deleteTaskWaypointAt(self, task: MultiWaypointTask, index: int) -> None:
         waypoint = task.waypoints[index]
         self.beforeWaypointDeleted.emit(waypoint.uuid)
