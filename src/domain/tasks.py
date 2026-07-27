@@ -808,7 +808,7 @@ class DeployPayloadAtTask(SingleWaypointTask):
             uuid = UUID(data["task-uuid"]),
             waypoint = GeoPoint.fromJson(data["params"]["waypoint"]),
             speed = MovementSpeedParam(data["params"]["speed"]),
-            payload = str(data["params"]["payload"]),
+            payload = str(data["params"]["unit"]),
         )
 
     def toJson(self) -> dict:
