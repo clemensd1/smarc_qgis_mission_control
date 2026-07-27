@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 from .schema import Schema, SchemaMixin, Column, Unit
+from .jsoncodec import JsonCodec
 
 __all__ = ["Waypoint", "AUVWaypoint", "GeoPoint"]
 
@@ -23,15 +24,8 @@ class Waypoint(SchemaMixin):
     @classmethod
     def fromJson(cls, data: dict):
         """Load a waypoint from mission plan JSON."""
-        # NOTE: This should be implemented by subclasses
-        raise NotImplementedError
+        return JsonCodec.decodeSchema(cls, data)
 
-    def toJson(self) -> dict:
-        """Convert the waypoint to mission plan JSON."""
-        return {
-            "latitude"  : self.latitude,
-            "longitude" : self.longitude,
-        }
 
 @dataclass
 class AUVWaypoint(Waypoint):
@@ -40,14 +34,14 @@ class AUVWaypoint(Waypoint):
     """
 
     #: Depth below the sea level. TODO: or below some other level?
-    depth        : Annotated[float, Unit("m"), Column("Depth")] \
+    target_depth : Annotated[float, Unit("m"), Column("Depth")] \
                  =    .0
-    #: Minimum altitude from the sea floor; takes priority over `depth`.
+    #: Minimum altitude from the sea floor; takes priority over `target_depth`.
     min_altitude : Annotated[float, Unit("m"), Column("Min. Alt.", "Min. Altitude")] \
                  =    .0
     #: Distance within which the waypoint is considered reached.
     tolerance    : Annotated[float, Unit("m"), Column("Tol.", "Tolerance")] \
-                 =  10.0 
+                 =  10.0
     #: RPM used while traveling to the waypoint.
     rpm          : Annotated[float, Column("RPM")] \
                  = 500.0
@@ -55,29 +49,13 @@ class AUVWaypoint(Waypoint):
     timeout      : Annotated[float, Unit("s"), Column("Timeout")] \
                  =    .0
 
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "target_depth" : self.depth,
-            "min_altitude" : self.min_altitude,
-            "tolerance"    : self.tolerance,
-            "rpm"          : self.rpm,
-            "timeout"      : self.timeout,
-        }
-
     @classmethod
     def fromJson(cls, data: dict) -> 'AUVWaypoint':
         # make sure not parsing a WARA-PS GeoPoint by accident
         if data.get("rostype") == "GeoPoint":
             raise ValueError(f"GeoPoint data passed to {cls.__name__}")
-        return cls(
-            latitude     = float(data["latitude"]),
-            longitude    = float(data["longitude"]),
-            depth        = float(data["target_depth"]),
-            min_altitude = float(data["min_altitude"]),
-            tolerance    = float(data["tolerance"]),
-            rpm          = float(data["rpm"]),
-            timeout      = float(data["timeout"]),
-        )
+        return JsonCodec.decodeSchema(cls, data)
+
 
 @dataclass
 class GeoPoint(Waypoint):
@@ -87,12 +65,10 @@ class GeoPoint(Waypoint):
     #: Distance within which the waypoint is considered reached.
     #: NOTE: not part of WARA-PS spec
     tolerance : Annotated[float, Unit("m"), Column("Tol.", "Tolerance")] \
-              =  10.0 
+              =  10.0
 
     def toJson(self) -> dict:
-        return super().toJson() | {
-            "altitude"  : self.altitude,
-            "tolerance" : self.tolerance,
+        return JsonCodec.encodeSchema(self) | {
             "rostype"   : "GeoPoint",
         }
 
@@ -101,9 +77,4 @@ class GeoPoint(Waypoint):
         # make sure we ARE parsing a WARA-PS GeoPoint
         if data.get("rostype") != "GeoPoint":
             raise ValueError(f"Non-GeoPoint data passed to {cls.__name__}")
-        return cls(
-            latitude  = float(data["latitude"]),
-            longitude = float(data["longitude"]),
-            altitude  = float(data["altitude"]),
-            tolerance = float(data["tolerance"]),
-        )
+        return JsonCodec.decodeSchema(cls, data)

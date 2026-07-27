@@ -1,9 +1,16 @@
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from typing import (get_origin, get_args, get_type_hints,
                     Annotated, Any, Type, Sequence)
 from enum import Enum
 
-__all__ = ["Unit", "Column", "FieldSpec", "Schema"]
+__all__ = [
+    "Unit",
+    "Column",
+    "JsonKey",
+    "FieldSpec",
+    "Schema",
+    "SchemaMixin"
+]
 
 
 @dataclass(frozen=True)
@@ -18,11 +25,17 @@ class Column:
 
 
 @dataclass(frozen=True)
+class JsonKey:
+    name: str
+
+
+@dataclass(frozen=True)
 class FieldSpec:
     name: str
-    baseType: type
+    baseType: Any
     column: Column | None
     unit: Unit | None
+    jsonKey: JsonKey | None
 
     def label(self, preferLong: bool = True) -> str:
         if not self.column:
@@ -34,19 +47,23 @@ class FieldSpec:
     def withUnit(self, text: str) -> str:
         if self.unit:
             return f"{text} [{self.unit.unit}]"
-        else:
-            return text
+        return text
 
     def header(self, preferLong = True, unit: bool = True):
         if unit:
             return self.withUnit(self.label(preferLong))
         return self.label(preferLong)
 
-    def type(self) -> type:
+    def type(self) -> Any:
         return self.baseType
 
+    def jsonName(self) -> str:
+        if self.jsonKey is None:
+            return self.name
+        return self.jsonKey.name
+
     def choices(self) -> list[Enum] | None:
-        if issubclass(self.baseType, Enum):
+        if isinstance(self.baseType, type) and issubclass(self.baseType, Enum):
             return list(self.baseType)
         return None
 
@@ -54,7 +71,7 @@ class FieldSpec:
         return getattr(obj, self.name)
 
     def setValue(self, obj: object, value: Any):
-        if issubclass(self.baseType, Enum):
+        if isinstance(self.baseType, type) and issubclass(self.baseType, Enum):
             try:
                 value = self.baseType(value)
             except ValueError: # TODO: enum classes still required though?
@@ -88,13 +105,16 @@ class Schema:
             # Process annotations from inside out, i.e. outermost takes priority
             unit = None
             column = None
+            jsonKey = None
             for arg in reversed(meta):
                 if isinstance(arg, Column):
                     column = arg
                 elif isinstance(arg, Unit):
                     unit = arg
+                elif isinstance(arg, JsonKey):
+                    jsonKey = arg
 
-            specs.append(FieldSpec(f.name, baseType, column, unit))
+            specs.append(FieldSpec(f.name, baseType, column, unit, jsonKey))
 
         return cls(specs)
 
@@ -104,3 +124,21 @@ class SchemaMixin:
     def schema(cls) -> Schema:
         """Get a Schema for editing annotated datafields of this class."""
         return Schema.fromDataclass(cls)
+
+    @classmethod
+    def requiredFields(cls) -> list[FieldSpec]:
+        dataclassFields = {f.name: f for f in fields(cls)}
+        return [
+            spec for spec in cls.schema().fields
+            if dataclassFields[spec.name].default is MISSING
+            and dataclassFields[spec.name].default_factory is MISSING
+        ]
+
+    def toJson(self) -> dict:
+        from .jsoncodec import JsonCodec
+        return JsonCodec.encodeSchema(self)
+
+    @classmethod
+    def fromJson(cls, data: dict):
+        from .jsoncodec import JsonCodec
+        return JsonCodec.decodeSchema(cls, data)

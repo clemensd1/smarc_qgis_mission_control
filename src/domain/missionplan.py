@@ -2,7 +2,7 @@ from typing import Any, Annotated
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
-from .tasks import Task, TaskType, TaskRegistry
+from .tasks import Task, TaskRegistry
 from .schema import SchemaMixin, Column, Unit
 
 __all__ = ["MissionPlan"]
@@ -22,10 +22,7 @@ class MissionPlan(SchemaMixin):
     def fromJson(cls, data: dict[str, Any]) -> 'MissionPlan':
         tasks = []
         for c in data["children"]:
-            # NOTE: task "name" is actually the type, e.g. move-to
-            type = TaskType(c["name"])
-            taskCls = TaskRegistry.lookup(type)
-            tasks.append(taskCls.fromJson(c))
+            tasks.append(TaskRegistry.taskFromJson(c))
 
         return cls(
             # fmt: off
