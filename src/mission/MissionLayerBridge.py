@@ -8,7 +8,8 @@ from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeome
 from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
+from ..domain.taskspatial import iterTaskWaypoints
 
 
 __all__ = ["MissionLayerBridge"]
@@ -26,10 +27,11 @@ class FeatureAddedEntry(JournalEntry):
 
 @dataclass
 class FeatureDeletedEntry(JournalEntry):
-    ...
+    waypointUuid: UUID
 
 @dataclass
 class FeatureMovedEntry(JournalEntry):
+    waypointUuid: UUID
     latitude: float
     longitude: float
 
@@ -115,15 +117,9 @@ class MissionLayerBridge(QObject):
             self._importTask(task)
 
     def _importTask(self, task: Task) -> None:
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                self._importWaypoint(task.uuid, waypoint)
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    self._importWaypoint(task.uuid, waypoint)
-            case _:
-                # Task has no waypoints, which currently means no map presence
-                ...
+        # Tasks without waypoints currently have no map presence
+        for waypoint in iterTaskWaypoints(task):
+            self._importWaypoint(task.uuid, waypoint)
 
     def _importWaypoint(self, taskUuid: UUID, waypoint: Waypoint) -> None:
         feat = self._waypointToFeature(taskUuid, waypoint)
@@ -169,7 +165,8 @@ class MissionLayerBridge(QObject):
             case self.State.QGIS_EDIT_COMMAND:
                 taskUuid = UUID(feat.attribute('task-uuid'))
                 point = feat.geometry().asPoint()
-                entry = FeatureAddedEntry(fid, taskUuid, waypointUuid, point.y(), point.x())
+                entry = FeatureAddedEntry(fid, taskUuid, waypointUuid, point.y(),
+                                          point.x())
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -186,9 +183,11 @@ class MissionLayerBridge(QObject):
             case self.State.DEFAULT:
                 ...
             case self.State.QGIS_EDIT_COMMAND:
+                waypointUuid = self.waypointUuidForFeatureId(fid)
+                assert(waypointUuid is not None)
                 feat = self.waypointLayer.getFeature(fid)
                 point = feat.geometry().asPoint()
-                entry = FeatureMovedEntry(fid, point.y(), point.x())
+                entry = FeatureMovedEntry(fid, waypointUuid, point.y(), point.x())
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -201,11 +200,14 @@ class MissionLayerBridge(QObject):
     def onFeatureDeleted(self, fid: int) -> None:
         print('onFeatureDeleted', fid)
 
+        waypointUuid = self.waypointUuidForFeatureId(fid)
+        assert(waypointUuid is not None)
+
         match self._state:
             case self.State.DEFAULT:
                 ...
             case self.State.QGIS_EDIT_COMMAND:
-                entry = FeatureDeletedEntry(fid)
+                entry = FeatureDeletedEntry(fid, waypointUuid)
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -214,9 +216,6 @@ class MissionLayerBridge(QObject):
             case _ as unreachable:
                 assert_never(unreachable)
 
-        waypointUuid = self.waypointUuidForFeatureId(fid)
-        assert(waypointUuid)
-        # if waypointUuid is not None:
         del self._waypointUuidToFid[waypointUuid]
         del self._fidToWaypointUuid[fid]
 
@@ -245,14 +244,15 @@ class MissionLayerBridge(QObject):
                 case FeatureAddedEntry(fid, taskUuid, waypointUuid, latitude, longitude):
                     assert(waypointUuid)
                     self.parent().addWaypoint(taskUuid, latitude, longitude, waypointUuid)
-                case FeatureDeletedEntry(fid):
-                    waypointUuid = self.waypointUuidForFeatureId(fid)
-                    assert(waypointUuid is not None)
-                    self.parent().deleteWaypoint(waypointUuid)
-                case FeatureMovedEntry(fid, latitude, longitude):
-                    waypointUuid = self.waypointUuidForFeatureId(fid)
-                    assert(waypointUuid is not None)
-                    self.parent().setWaypointPosition(waypointUuid, latitude, longitude)
+                case FeatureDeletedEntry(fid, waypointUuid):
+                    # Deleting one fixed waypoint may delete its entire task, including
+                    # other features in the same QGIS edit command.
+                    if self.parent().index.waypointByUuid(waypointUuid) is not None:
+                        self.parent().deleteWaypoint(waypointUuid)
+                case FeatureMovedEntry(fid, waypointUuid, latitude, longitude):
+                    if self.parent().index.waypointByUuid(waypointUuid) is not None:
+                        self.parent().setWaypointPosition(
+                            waypointUuid, latitude, longitude)
 
         self._journal = []
         self._state = self.State.DEFAULT
