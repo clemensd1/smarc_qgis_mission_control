@@ -109,6 +109,10 @@ class SMaRCMissionControlPlugin(QObject):
         """Called when the plugin is deactivated."""
         self.fleetContext.mqtt.disconnect()
 
+        # Clean up scratch layers created at runtime
+        self.missionContext.cleanup()
+        self.fleetContext.mapManager.cleanup()
+
         # TODO: can be cleaner
         # qgs = QgsProject.instance()
         # for doc in self.missionContext._missionDocuments.values():

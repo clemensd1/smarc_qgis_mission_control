@@ -24,7 +24,7 @@ class FleetMapManager(QObject):
     vehicleExpired = pyqtSignal(str)
     vehicleUpdated = pyqtSignal(str)
 
-    _waypointLayer: QgsVectorLayer
+    _waypointLayer: QgsVectorLayer | None = None
 
     def __init__(self, fleetState: FleetState, parent: QObject | None):
         super().__init__(parent)
@@ -234,6 +234,10 @@ class FleetMapManager(QObject):
         if vehicle is None or vehicle.lastFid is None:
             return
 
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized in onLookAtRequested!")
+            return
+
         iface.mapCanvas().zoomToFeatureIds(self._waypointLayer, [vehicle.lastFid])
         iface.mapCanvas().zoomScale(1000) # zoom to fixed scale (e.g. 1:500)
 
@@ -241,7 +245,7 @@ class FleetMapManager(QObject):
         if self._waypointLayer is None:
             print("Error: Waypoint layer not initialized on clear all!")
             return
-        
+
         # Clear all features from the vector layer
         self._waypointLayer.dataProvider().truncate()
         self._waypointLayer.triggerRepaint()
@@ -253,4 +257,18 @@ class FleetMapManager(QObject):
             vehicle.lastLongitude = None
             vehicle.lastFid = None
 
-    # TODO: cleanup method for vehicleLayers
+    def cleanup(self) -> None:
+        if self._waypointLayer is None:
+            return
+
+        qgs = QgsProject.instance()
+
+        try:
+            layerId = self._waypointLayer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        self._waypointLayer = None
