@@ -3,7 +3,8 @@ from uuid import UUID
 
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
+from ..domain.taskspatial import iterTaskWaypoints
 
 
 @dataclass
@@ -33,29 +34,11 @@ class MissionIndex:
 
         return self.taskMap.get(taskUuid)
 
-    def indexForWaypointUuid(self, waypointUuid: UUID) -> int | None:
-        task = self.taskByWaypointUuid(waypointUuid)
-        if task is None:
-            return None
-
-        # TODO: not the most optimal way of doing this
-        assert(isinstance(task, MultiWaypointTask))
-        for idx, waypoint in enumerate(task.waypoints):
-            if waypointUuid == waypoint.uuid:
-                return idx
-
-        return None
-
     def registerTask(self, task: Task):
         self.taskMap[task.uuid] = task
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                self.waypointMap[waypoint.uuid] = waypoint
-                self.waypointTaskMap[waypoint.uuid] = task.uuid
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    self.waypointMap[waypoint.uuid] = waypoint
-                    self.waypointTaskMap[waypoint.uuid] = task.uuid
+        for waypoint in iterTaskWaypoints(task):
+            self.waypointMap[waypoint.uuid] = waypoint
+            self.waypointTaskMap[waypoint.uuid] = task.uuid
 
     def forgetTask(self, taskUuid: UUID):
         task = self.taskByUuid(taskUuid)
@@ -63,14 +46,9 @@ class MissionIndex:
             # TODO: invalid mapping
             return
 
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                del self.waypointMap[waypoint.uuid]
-                del self.waypointTaskMap[waypoint.uuid]
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    del self.waypointMap[waypoint.uuid]
-                    del self.waypointTaskMap[waypoint.uuid]
+        for waypoint in iterTaskWaypoints(task):
+            del self.waypointMap[waypoint.uuid]
+            del self.waypointTaskMap[waypoint.uuid]
 
         del self.taskMap[taskUuid]
 

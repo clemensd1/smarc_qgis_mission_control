@@ -13,7 +13,8 @@ from uuid import UUID
 
 from ...mission.MissionContext import MissionContext
 from ...mission.MissionDocument import MissionDocument
-from ...domain.tasks import SingleWaypointTask
+from ...domain.tasks import Task
+from ...domain.waypoints import Waypoint
 from ...model.WaypointListModel import WaypointListModel
 from ..generated.WaypointFormWidgetUi import Ui_WaypointFormWidget
 from .AutomaticFormWidget import AutomaticFormWidget
@@ -22,18 +23,19 @@ __all__ = ['WaypointFormWidget']
 
 
 class WaypointFormWidget(AutomaticFormWidget):
-    _taskCls: Type[SingleWaypointTask]
+    _taskCls: Type[Task]
     _model: WaypointListModel
 
     selectLocationRequested = pyqtSignal(QAction, UUID, bool)
 
-    def __init__(self, taskCls: Type[SingleWaypointTask],
+    def __init__(self, taskCls: Type[Task], fieldName: str, waypointCls: Type[Waypoint],
                  missionContext: MissionContext, parent: QWidget | None = None):
-        schema = taskCls.waypointClass.schema()
+        schema = waypointCls.schema()
         self._model = WaypointListModel(schema, longHeaders = True)
         super().__init__(self._model, parent)
 
         self._taskCls = taskCls
+        self._fieldName = fieldName
         self._missionContext = missionContext
 
         self.ui = Ui_WaypointFormWidget()
@@ -67,7 +69,7 @@ class WaypointFormWidget(AutomaticFormWidget):
 
 
     def bind(self, doc: MissionDocument, taskUuid: UUID):
-        self._model.bind(doc, taskUuid)
+        self._model.bind(doc, taskUuid, self._fieldName)
         self._mapper.toFirst()
 
     def unbind(self):

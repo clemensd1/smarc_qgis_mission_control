@@ -1,13 +1,14 @@
 from uuid import UUID
 
 from qgis.PyQt.QtCore import Qt, pyqtSlot, QItemSelection
-from qgis.PyQt.QtWidgets import QWidget, QHeaderView, QAbstractItemDelegate, QDialog, QDataWidgetMapper
+from qgis.PyQt.QtWidgets import (QWidget, QHeaderView, QAbstractItemDelegate, QDialog,
+                                 QDataWidgetMapper, QMessageBox)
 from qgis.core import QgsApplication
 
 from ...mission.MissionContext import MissionContext
 from ...mission.MissionDocument import MissionDocument
 from ...domain.missionplan import MissionPlan
-from ...domain.tasks import TaskRegistry, TaskType, SingleWaypointTask
+from ...domain.tasks import TaskRegistry, UnsupportedTaskCreationError
 from ...model.TaskListModel import TaskListModel
 from ...model.MissionParamsModel import MissionParamsModel
 from ..generated.MissionPlanWidgetUi import Ui_MissionPlanWidget
@@ -16,7 +17,7 @@ from .AddTaskDialog import AddTaskDialog
 
 
 class MissionPlanWidget(QWidget):
-    taskEditors: dict[TaskType, TaskEditorWidget]
+    taskEditors: dict[str, TaskEditorWidget]
 
     _missionContext: MissionContext
 
@@ -81,13 +82,13 @@ class MissionPlanWidget(QWidget):
         )
 
         # Create and setup task editor widgets
-        for type in TaskType:
+        for typeId, taskCls in TaskRegistry.registry.items():
             editor = TaskEditorWidget(
-                TaskRegistry.lookup(type),
+                taskCls,
                 self._missionContext,
                 self.ui.taskEditorStack
             )
-            self.taskEditors[type] = editor
+            self.taskEditors[typeId] = editor
             self.ui.taskEditorStack.addWidget(editor)
 
     @pyqtSlot(MissionDocument)
@@ -143,7 +144,15 @@ class MissionPlanWidget(QWidget):
         if dialog.exec() != QDialog.Accepted:
             return
 
-        doc.addTask(dialog.type(), dialog.description())
+        try:
+            doc.addTask(dialog.type(), dialog.description())
+        except UnsupportedTaskCreationError as error:
+            QMessageBox.warning(
+                self,
+                "Unsupported task creation",
+                (f"{error}\n\nThis task can currently only be loaded from an existing"
+                  " mission file.")
+            )
 
     @pyqtSlot()
     def onRemoveTaskClicked(self):

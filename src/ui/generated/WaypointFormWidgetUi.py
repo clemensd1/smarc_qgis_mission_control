@@ -15,6 +15,11 @@ class Ui_WaypointFormWidget(object):
     def setupUi(self, WaypointFormWidget):
         WaypointFormWidget.setObjectName("WaypointFormWidget")
         WaypointFormWidget.resize(486, 48)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(WaypointFormWidget.sizePolicy().hasHeightForWidth())
+        WaypointFormWidget.setSizePolicy(sizePolicy)
         self.horizontalLayout = QtWidgets.QHBoxLayout(WaypointFormWidget)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout.setObjectName("horizontalLayout")

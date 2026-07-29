@@ -10,7 +10,7 @@ from qgis.core import *
 from qgis.utils import iface
 
 from ..domain.missionplan import MissionPlan
-from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import PendingWaypointTask
 
 
 __all__ = ["MissionMapManager"]
@@ -26,7 +26,7 @@ class MyMapTool(QgsMapTool):
             return point
         transform = QgsCoordinateTransform(canvas_crs, wgs84, QgsProject.instance())
         return transform.transform(point)
-    
+
     def canvasReleaseEvent(self, e: QgsMapMouseEvent):
         point = self._toWgs84(self.toMapCoordinates(e.pos()))
         if e.button() == Qt.MouseButton.RightButton:
@@ -39,6 +39,7 @@ class AddWaypointTool(MyMapTool):
     class Configuration:
         insertAt: int
         taskUuid: UUID
+        fieldName: str
         anchorBefore: QgsPointXY | None
         anchorAfter: QgsPointXY | None
 
@@ -54,17 +55,22 @@ class AddWaypointTool(MyMapTool):
             return None
         return self._config.taskUuid
 
+    def fieldName(self) -> str | None:
+        if self._config is None:
+            return None
+        return self._config.fieldName
+
 class PickInitialWaypointTool(MyMapTool):
     @dataclass
     class Configuration:
-        pendingTask: SingleWaypointTask.Pending
+        pendingTask: PendingWaypointTask
 
     _config: Configuration | None = None
 
     def configure(self, config: Configuration):
         self._config = config
 
-    def pendingTask(self) -> SingleWaypointTask.Pending | None:
+    def pendingTask(self) -> PendingWaypointTask | None:
         if self._config is None:
             return None
         return self._config.pendingTask
@@ -137,7 +143,7 @@ class MissionMapManager(QObject):
     _pickInitialWaypointTool: PickInitialWaypointTool
     _addWaypointTool: AddWaypointTool
 
-    initialWaypointPicked = pyqtSignal(SingleWaypointTask.Pending, QgsPointXY)
+    initialWaypointPicked = pyqtSignal(PendingWaypointTask, QgsPointXY)
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -173,7 +179,12 @@ class MissionMapManager(QObject):
                 # TODO: invalid mapping
                 return
 
-            doc.addWaypoint(self._addWaypointTool.taskUuid(), point.y(), point.x())
+            taskUuid = self._addWaypointTool.taskUuid()
+            fieldName = self._addWaypointTool.fieldName()
+            if taskUuid is None or fieldName is None:
+                # TODO: invalid mapping
+                return
+            doc.addWaypoint(taskUuid, point.y(), point.x(), fieldName = fieldName)
 
     @pyqtSlot(QgsPointXY, Qt.MouseButton)
     def onSelectLocationToolMapClicked(self, point: QgsPointXY,
@@ -195,10 +206,10 @@ class MissionMapManager(QObject):
 
             doc.setWaypointPosition(waypointUuid, point.y(), point.x())
 
-    def pickInitialWaypoint(self, pendingTask: SingleWaypointTask.Pending) -> None:
+    def pickInitialWaypoint(self, pendingTask: PendingWaypointTask) -> None:
         self._previousTool = self._canvas.mapTool()
         config = PickInitialWaypointTool.Configuration(
-            pendingTask=pendingTask
+            pendingTask = pendingTask
         )
         self._pickInitialWaypointTool.configure(config)
         self._canvas.setMapTool(self._pickInitialWaypointTool)
@@ -212,6 +223,9 @@ class MissionMapManager(QObject):
         elif button == Qt.MouseButton.LeftButton:
             # Add a new feature!
             pendingTask = self._pickInitialWaypointTool.pendingTask()
+            if pendingTask is None:
+                # TODO: invalid mapping
+                return
             self.initialWaypointPicked.emit(pendingTask, point)
 
             # Done picking initial waypoint
@@ -236,9 +250,9 @@ class MissionMapManager(QObject):
             self._canvas.setMapTool(self._previousTool)
             self._selectLocationTool.setAction(None)
 
-    @pyqtSlot(QAction, int, UUID, bool)
+    @pyqtSlot(QAction, int, UUID, str, bool)
     def onAddWaypointRequested(self, action: QAction, insertAt: int, taskUuid: UUID,
-                               active: bool) -> None:
+                               fieldName: str, active: bool) -> None:
         if active:
             self._previousTool = self._canvas.mapTool()
             self._addWaypointTool.setAction(action)
@@ -246,6 +260,7 @@ class MissionMapManager(QObject):
             config = AddWaypointTool.Configuration(
                 insertAt = insertAt,
                 taskUuid = taskUuid,
+                fieldName = fieldName,
                 # TODO:
                 anchorBefore = None,
                 anchorAfter = None,

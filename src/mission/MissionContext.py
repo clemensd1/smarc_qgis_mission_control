@@ -8,7 +8,7 @@ from qgis.core import QgsPointXY
 from .MissionMapManager import MissionMapManager
 from .MissionDocument import MissionDocument
 from ..domain.missionplan import MissionPlan
-from ..domain.tasks import *
+from ..domain.tasks import PendingWaypointTask
 
 
 __all__ = ["MissionContext"]
@@ -109,13 +109,13 @@ class MissionContext(QObject):
         self.editingFinished.emit()
         self.editModeChanged.emit(False)
 
-    @pyqtSlot(SingleWaypointTask.Pending, QgsPointXY)
+    @pyqtSlot(PendingWaypointTask, QgsPointXY)
     # TODO: should this be here?
-    def onInitialWaypointPicked(self, pendingTask: SingleWaypointTask.Pending,
+    def onInitialWaypointPicked(self, pendingTask: PendingWaypointTask,
                                 point: QgsPointXY):
         doc = self.activeDocument()
         if doc is None:
             # TODO: invalid mapping
             return
 
-        doc.addSingleWaypointTask(pendingTask, point)
+        doc.addPendingWaypointTask(pendingTask, point)

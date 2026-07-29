@@ -11,27 +11,29 @@ from dataclasses import replace as dtReplace
 
 from ...mission.MissionContext import MissionContext
 from ...mission.MissionDocument import MissionDocument
-from ...domain.tasks import MultiWaypointTask
+from ...domain.tasks import Task
+from ...domain.waypoints import Waypoint
 from ...model.WaypointListModel import WaypointListModel
 from ..generated.WaypointTableWidgetUi import Ui_WaypointTableWidget
 
 __all__ = ['WaypointTableWidget']
 
 class WaypointTableWidget(QWidget):
-    _taskCls: Type[MultiWaypointTask]
+    _taskCls: Type[Task]
     _model: WaypointListModel
 
-    addWaypointRequested = pyqtSignal(QAction, int, UUID, bool)
+    addWaypointRequested = pyqtSignal(QAction, int, UUID, str, bool)
     selectLocationRequested = pyqtSignal(QAction, UUID, bool)
 
-    def __init__(self, taskCls: Type[MultiWaypointTask], missionContext: MissionContext,
-                 parent: QWidget|None = None):
+    def __init__(self, taskCls: Type[Task], fieldName: str, waypointCls: Type[Waypoint],
+                 missionContext: MissionContext, parent: QWidget|None = None):
         super().__init__(parent)
 
         self._taskCls = taskCls
+        self._fieldName = fieldName
         self._missionContext = missionContext
 
-        schema = taskCls.waypointClass.schema()
+        schema = waypointCls.schema()
         self._model = WaypointListModel(schema, longHeaders = False)
 
         self.ui = Ui_WaypointTableWidget()
@@ -99,7 +101,7 @@ class WaypointTableWidget(QWidget):
         )
 
     def bind(self, doc: MissionDocument, taskUuid: UUID):
-        self._model.bind(doc, taskUuid)
+        self._model.bind(doc, taskUuid, self._fieldName)
 
     def unbind(self):
         self._model.unbind()
@@ -130,6 +132,7 @@ class WaypointTableWidget(QWidget):
             self.ui.buttonAddWaypoint.defaultAction(),
             self._model.rowCount(), # add after last waypoint
             self._model._task.uuid,
+            self._fieldName,
             state
         )
 
