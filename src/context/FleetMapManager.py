@@ -66,6 +66,11 @@ class FleetMapManager(QObject):
         # Register layer with project
         qgs.addMapLayer(self._waypointLayer, False)
 
+        # Make the layer non-removable (by users)
+        flags = self._waypointLayer.flags()
+        flags &= ~self._waypointLayer.LayerFlag.Removable
+        self._waypointLayer.setFlags(flags)
+
         # Insert the layer at top of layer tree
         QgsProject.instance().layerTreeRoot().insertLayer(0, self._waypointLayer)
 
