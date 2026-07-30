@@ -30,12 +30,25 @@ class FleetMapManager(QObject):
         super().__init__(parent)
 
         self._vehicles: dict[str, VehicleMapObject] = {}
-        self._setupWaypointLayer()
+        # If a layer is created at this point, it will mark QgsProject as dirty. This
+        # will cause a popup to appear asking the user whether they want to save or
+        # discard their project changes -- even if no project is loaded!
+        # The solution is to wait until QGIS is fully initialized, and only _then_ add
+        # any layers.
+        # However, if QGIS is already open/initialized, the layer can be created right
+        # away. This happens when the plugin is reloaded.
+        if iface.mainWindow().isVisible():
+            # Plugin reloaded
+            self._setupWaypointLayer()
+        else:
+            # Fresh startup
+            iface.initializationCompleted.connect(self._setupWaypointLayer)
 
         self._fleetState = fleetState
         self._fleetState.vehicleDiscovered.connect(self.onVehicleDiscovered)
         self._fleetState.vehicleUpdated.connect(self.onVehicleUpdated)
 
+    @pyqtSlot()
     def _setupWaypointLayer(self):
         qgs = QgsProject.instance()
         # Remove any stale layers
