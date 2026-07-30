@@ -45,6 +45,8 @@ class MissionPlanWidget(QWidget):
 
         # Respect edit mode
         self._missionContext.editModeChanged.connect(self.onEditModeChanged)
+        # Make sure any pending changes are submitted
+        self._missionContext.editingAboutToFinish.connect(self._mapper.submit)
 
         # Signals for refreshing the task list
         # TODO

@@ -163,6 +163,9 @@ class MissionControlDockWidget(QgsDockWidget):
             # Start editing
             doc.startEditing()
         else:
+            # Make sure any pending input field changes are properly recognized
+            self._missionContext.prepareToFinishEditing()
+
             if doc.isModified():
                 box = QMessageBox(self)
                 box.setIcon(QMessageBox.Question)

@@ -20,6 +20,7 @@ class MissionContext(QObject):
 
     editModeChanged = pyqtSignal(bool)
     editingStarted = pyqtSignal()
+    editingAboutToFinish = pyqtSignal()
     editingFinished = pyqtSignal()
 
     beforeTaskAdded = pyqtSignal(UUID, int)
@@ -119,6 +120,9 @@ class MissionContext(QObject):
             return
 
         doc.addPendingWaypointTask(pendingTask, point)
+
+    def prepareToFinishEditing(self) -> None:
+        self.editingAboutToFinish.emit()
 
     def cleanup(self) -> None:
         qgs = QgsProject.instance()

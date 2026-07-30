@@ -50,6 +50,8 @@ class WaypointFormWidget(AutomaticFormWidget):
         self._missionContext.editModeChanged.connect(
             self.onEditModeChanged
         )
+        # Make sure any pending changes are submitted
+        self._missionContext.editingAboutToFinish.connect(self._mapper.submit)
 
         # Handling of the waypoint map tools
         # TODO:
