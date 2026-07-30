@@ -164,16 +164,23 @@ class MissionControlDockWidget(QgsDockWidget):
             doc.startEditing()
         else:
             if doc.isModified():
-                reply = QMessageBox.question(
-                    self,
-                    "Mission plan modified",
-                    "Save changes to mission plan?",
-                    QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                    QMessageBox.Save
-                )
-                if reply == QMessageBox.Save:
+                box = QMessageBox(self)
+                box.setIcon(QMessageBox.Question)
+                box.setWindowTitle("Mission plan modified")
+                box.setText("Commit changes to mission plan?")
+
+                commitButton = box.addButton("Commit", QMessageBox.AcceptRole)
+                discardButton = box.addButton(QMessageBox.Discard)
+                cancelButton = box.addButton(QMessageBox.Cancel)
+
+                box.setDefaultButton(commitButton)
+
+                box.exec()
+                reply = box.clickedButton()
+
+                if reply is commitButton:
                     doc.stopEditing(save = True)
-                elif reply == QMessageBox.Discard:
+                elif reply is discardButton:
                     doc.stopEditing(save = False)
                 else:
                     # User changed their mind, restore button state
