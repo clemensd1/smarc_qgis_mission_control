@@ -61,7 +61,7 @@ class TaskEditorWidget(AutomaticFormWidget):
                 continue
 
             label = QLabel(spec.header(preferLong = True) + ":", self)
-            self._formLayout.addRow(label)
+            self._formLayout.addRow(label, None)
 
             if waypointCls is not None:
                 editor = WaypointFormWidget(taskCls, spec.name, waypointCls,
