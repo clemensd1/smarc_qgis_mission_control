@@ -24,18 +24,31 @@ class FleetMapManager(QObject):
     vehicleExpired = pyqtSignal(str)
     vehicleUpdated = pyqtSignal(str)
 
-    _waypointLayer: QgsVectorLayer
+    _waypointLayer: QgsVectorLayer | None = None
 
     def __init__(self, fleetState: FleetState, parent: QObject | None):
         super().__init__(parent)
 
         self._vehicles: dict[str, VehicleMapObject] = {}
-        self._setupWaypointLayer()
+        # If a layer is created at this point, it will mark QgsProject as dirty. This
+        # will cause a popup to appear asking the user whether they want to save or
+        # discard their project changes -- even if no project is loaded!
+        # The solution is to wait until QGIS is fully initialized, and only _then_ add
+        # any layers.
+        # However, if QGIS is already open/initialized, the layer can be created right
+        # away. This happens when the plugin is reloaded.
+        if iface.mainWindow().isVisible():
+            # Plugin reloaded
+            self._setupWaypointLayer()
+        else:
+            # Fresh startup
+            iface.initializationCompleted.connect(self._setupWaypointLayer)
 
         self._fleetState = fleetState
         self._fleetState.vehicleDiscovered.connect(self.onVehicleDiscovered)
         self._fleetState.vehicleUpdated.connect(self.onVehicleUpdated)
 
+    @pyqtSlot()
     def _setupWaypointLayer(self):
         qgs = QgsProject.instance()
         # Remove any stale layers
@@ -65,6 +78,11 @@ class FleetMapManager(QObject):
 
         # Register layer with project
         qgs.addMapLayer(self._waypointLayer, False)
+
+        # Make the layer non-removable (by users)
+        flags = self._waypointLayer.flags()
+        flags &= ~self._waypointLayer.LayerFlag.Removable
+        self._waypointLayer.setFlags(flags)
 
         # Insert the layer at top of layer tree
         QgsProject.instance().layerTreeRoot().insertLayer(0, self._waypointLayer)
@@ -229,6 +247,10 @@ class FleetMapManager(QObject):
         if vehicle is None or vehicle.lastFid is None:
             return
 
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized in onLookAtRequested!")
+            return
+
         iface.mapCanvas().zoomToFeatureIds(self._waypointLayer, [vehicle.lastFid])
         iface.mapCanvas().zoomScale(1000) # zoom to fixed scale (e.g. 1:500)
 
@@ -236,7 +258,7 @@ class FleetMapManager(QObject):
         if self._waypointLayer is None:
             print("Error: Waypoint layer not initialized on clear all!")
             return
-        
+
         # Clear all features from the vector layer
         self._waypointLayer.dataProvider().truncate()
         self._waypointLayer.triggerRepaint()
@@ -248,4 +270,18 @@ class FleetMapManager(QObject):
             vehicle.lastLongitude = None
             vehicle.lastFid = None
 
-    # TODO: cleanup method for vehicleLayers
+    def cleanup(self) -> None:
+        if self._waypointLayer is None:
+            return
+
+        qgs = QgsProject.instance()
+
+        try:
+            layerId = self._waypointLayer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        self._waypointLayer = None

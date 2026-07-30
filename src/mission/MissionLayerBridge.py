@@ -96,6 +96,11 @@ class MissionLayerBridge(QObject):
 
         qgs.addMapLayer(self.waypointLayer, False)
 
+        # Make the layer non-removable (by users)
+        flags = self.waypointLayer.flags()
+        flags &= ~self.waypointLayer.LayerFlag.Removable
+        self.waypointLayer.setFlags(flags)
+
         # Find or create the f"{self.SMARC_WP_GROUP_NAME}" group at  top of the layer tree
         root = QgsProject.instance().layerTreeRoot()
         wp_group = root.findGroup(f"{self.SMARC_WP_GROUP_NAME}")

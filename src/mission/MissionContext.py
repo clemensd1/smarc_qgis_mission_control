@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 import json
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject
-from qgis.core import QgsPointXY
+from qgis.core import QgsProject, QgsPointXY
 
 from .MissionMapManager import MissionMapManager
 from .MissionDocument import MissionDocument
@@ -119,3 +119,18 @@ class MissionContext(QObject):
             return
 
         doc.addPendingWaypointTask(pendingTask, point)
+
+    def cleanup(self) -> None:
+        qgs = QgsProject.instance()
+
+        for doc in self._missionDocuments.values():
+            try:
+                layerId = doc.layerBridge.waypointLayer.id()
+            except RuntimeError:
+                # Layer may have been removed externally, e.g. during QGIS shutdown
+                pass
+            else:
+                qgs.removeMapLayer(layerId)
+
+        self._missionDocuments.clear()
+        self._activeDocument = None
