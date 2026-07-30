@@ -71,3 +71,18 @@ class AutomaticFormWidget(QWidget):
             return widget
         else:
             raise NotImplementedError
+
+    def _setFieldWidgetEditMode(self, fieldWidget: QWidget, editMode: bool):
+        # Subclasses can overwrite it to be fancier with how they en/disable widgets
+        fieldWidget.setEnabled(editMode)
+
+    def setEditMode(self, editMode: bool):
+        self._model.setEditable(editMode)
+
+        for i in range(self._formLayout.rowCount()):
+            item = self._formLayout.itemAt(i, QFormLayout.FieldRole)
+            if item is None:
+                # Just a label on this row
+                continue
+
+            self._setFieldWidgetEditMode(item.widget(), editMode)
