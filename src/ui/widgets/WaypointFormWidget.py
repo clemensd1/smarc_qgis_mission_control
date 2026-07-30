@@ -77,7 +77,7 @@ class WaypointFormWidget(AutomaticFormWidget):
 
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool):
-        self._model.setEditable(editMode)
+        self.setEditMode(editMode)
         self.ui.buttonSelectLocation.setEnabled(editMode)
 
     @pyqtSlot(bool)
