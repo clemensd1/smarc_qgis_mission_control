@@ -12,13 +12,10 @@ from uuid import UUID, uuid4
 
 from ...domain.tasks import Task
 from ...domain.schema import Schema
-from ...domain.taskspatial import (isWaypointField, isWaypointListField,
-                                   waypointListType, waypointType)
+from ...domain.taskspatial import waypointListType, waypointType
 from ...mission.MissionContext import MissionContext
 from ...mission.MissionDocument import MissionDocument
-from ...model.SchemaBasedModel import SchemaBasedModel
-
-# from ..tasksUi import TaskUiRegistry
+from ...model.TaskParamsModel import TaskParamsModel
 
 from .AutomaticFormWidget import AutomaticFormWidget
 from .WaypointFormWidget import WaypointFormWidget
@@ -31,16 +28,9 @@ class TaskEditorWidget(AutomaticFormWidget):
 
     def __init__(self, taskCls: Type[Task], missionContext: MissionContext,
                  parent: QWidget | None = None):
-        schema = taskCls.schema()
-        scalarFields = [
-            spec for spec in schema.fields
-            if not isWaypointField(spec) and not isWaypointListField(spec)
-        ]
-        self._model = SchemaBasedModel(
-            Schema(scalarFields), longHeaders = True)
+        self._model = TaskParamsModel(taskCls)
         super().__init__(self._model, parent)
 
-        self._taskCls = taskCls
         self._editors = []
 
         self.setContentsMargins(0, 0, 0, 0)
@@ -51,15 +41,12 @@ class TaskEditorWidget(AutomaticFormWidget):
             Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
         self._formLayout.setFormAlignment(Qt.AlignTop)
 
-        scalarColumns = {
-            spec.name: column for column, spec in enumerate(scalarFields)
-        }
-        for spec in schema.fields:
+        for index, spec in enumerate(self._model.schema().fields):
             waypointCls = waypointType(spec.baseType)
             waypointListCls = waypointListType(spec.baseType)
 
             if waypointCls is None and waypointListCls is None:
-                self._addScalarField(spec, scalarColumns[spec.name])
+                self._addScalarField(spec, index)
                 continue
 
             label = QLabel(spec.header() + ":", self)
@@ -100,17 +87,14 @@ class TaskEditorWidget(AutomaticFormWidget):
             self._mapper.addMapping(field, column)
 
     def bind(self, doc: MissionDocument, taskUuid: UUID):
-        task = doc.index.taskByUuid(taskUuid)
-        assert(task)
-        assert(isinstance(task, self._taskCls))
-        self._model.setItems([task])
+        self._model.bind(doc, taskUuid)
         self._mapper.toFirst()
 
         for editor in self._editors:
             editor.bind(doc, taskUuid)
 
     def unbind(self):
-        self._model.setItems([])
+        self._model.unbind()
 
         for editor in self._editors:
             editor.unbind()
