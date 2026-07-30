@@ -79,8 +79,8 @@ class MissionDocument(QObject):
         self.editingStarted.emit()
         self.editModeChanged.emit(True)
 
-    def stopEditing(self, save: bool):
-        if save:
+    def stopEditing(self, commit: bool):
+        if commit:
             self.layerBridge.waypointLayer.commitChanges()
         else:
             self.layerBridge.waypointLayer.rollBack()

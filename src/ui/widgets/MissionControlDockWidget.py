@@ -179,16 +179,16 @@ class MissionControlDockWidget(QgsDockWidget):
                 reply = box.clickedButton()
 
                 if reply is commitButton:
-                    doc.stopEditing(save = True)
+                    doc.stopEditing(commit = True)
                 elif reply is discardButton:
-                    doc.stopEditing(save = False)
+                    doc.stopEditing(commit = False)
                 else:
                     # User changed their mind, restore button state
                     self.ui.buttonEditMissionPlan.setChecked(True)
                     return
             else:
                 # No changes anyways
-                doc.stopEditing(save = False)
+                doc.stopEditing(commit = False)
 
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool):
