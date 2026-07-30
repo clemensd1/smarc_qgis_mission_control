@@ -19,7 +19,6 @@ class Ui_MissionPlanWidget(object):
         self.verticalLayout.setContentsMargins(9, 9, 9, 9)
         self.verticalLayout.setObjectName("verticalLayout")
         self.missionPlanParameters = QtWidgets.QWidget(MissionPlanWidget)
-        self.missionPlanParameters.setEnabled(False)
         self.missionPlanParameters.setObjectName("missionPlanParameters")
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.missionPlanParameters)
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)

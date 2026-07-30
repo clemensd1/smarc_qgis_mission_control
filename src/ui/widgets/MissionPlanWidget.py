@@ -102,7 +102,8 @@ class MissionPlanWidget(QWidget):
 
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool) -> None:
-        self.ui.missionPlanParameters.setEnabled(editMode)
+        self.ui.missionPlanDescription.setEnabled(editMode)
+        self.ui.missionPlanTimeout.setEnabled(editMode)
         self.ui.taskListSidebar.setEnabled(editMode)
 
         self.taskListModel.setEditable(editMode)
