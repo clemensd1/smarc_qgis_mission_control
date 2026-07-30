@@ -27,6 +27,8 @@ from .WaypointTableWidget import WaypointTableWidget
 __all__ = ['TaskEditorWidget']
 
 class TaskEditorWidget(AutomaticFormWidget):
+    _editors: list[QWidget]
+
     def __init__(self, taskCls: Type[Task], missionContext: MissionContext,
                  parent: QWidget | None = None):
         schema = taskCls.schema()
@@ -60,9 +62,10 @@ class TaskEditorWidget(AutomaticFormWidget):
                 self._addScalarField(spec, scalarColumns[spec.name])
                 continue
 
-            label = QLabel(spec.header(preferLong = True) + ":", self)
+            label = QLabel(spec.header() + ":", self)
             self._formLayout.addRow(label, None)
 
+            editor: QWidget
             if waypointCls is not None:
                 editor = WaypointFormWidget(taskCls, spec.name, waypointCls,
                                             missionContext, self)
@@ -84,7 +87,7 @@ class TaskEditorWidget(AutomaticFormWidget):
 
     def _addScalarField(self, spec, column: int):
         label = QLabel(self)
-        label.setText(spec.header(preferLong = True) + ":")
+        label.setText(spec.header() + ":")
 
         field = self.createEditorWidget(self, spec.type())
         self._formLayout.addRow(label, field)
