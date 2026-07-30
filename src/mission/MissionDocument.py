@@ -343,3 +343,35 @@ class MissionDocument(QObject):
     def _setWaypointField(self, waypoint: Waypoint, fieldId: int, value: Any):
         waypoint.schema().fields[fieldId].setValue(waypoint, value)
         self.waypointChanged.emit(waypoint.uuid)
+
+    def setTaskField(self, taskUuid: UUID, fieldId: int, value: Any) -> None:
+        task = self.index.taskByUuid(taskUuid)
+        if task is None:
+            # TODO: invalid mapping
+            return
+
+        oldValue = task.schema().fields[fieldId].value(task)
+        cmd = SetTaskFieldUndoCommand(self, task, fieldId, value, oldValue)
+        with self.layerBridge.customEditCommand("Modify task"):
+            self._keepalive_undo.append(cmd)
+            self.layerBridge.waypointLayer.undoStack().push(cmd)
+
+    def _setTaskField(self, task: Task, fieldId: int, value: Any) -> None:
+        task.schema().fields[fieldId].setValue(task, value)
+        self.taskChanged.emit(task.uuid)
+
+    def setTaskDescription(self, taskUuid: UUID, value: str) -> None:
+        task = self.index.taskByUuid(taskUuid)
+        if task is None:
+            # TODO: invalid mapping
+            return
+
+        oldValue = task.description
+        cmd = SetTaskDescriptionUndoCommand(self, task, value, oldValue)
+        with self.layerBridge.customEditCommand("Modify task description"):
+            self._keepalive_undo.append(cmd)
+            self.layerBridge.waypointLayer.undoStack().push(cmd)
+
+    def _setTaskDescription(self, task: Task, value: str) -> None:
+        task.description = value
+        self.taskChanged.emit(task.uuid)
