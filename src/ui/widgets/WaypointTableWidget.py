@@ -53,6 +53,8 @@ class WaypointTableWidget(QWidget):
         self._missionContext.editModeChanged.connect(
             self.onEditModeChanged
         )
+        # Make sure any pending changes are submitted
+        self._missionContext.editingAboutToFinish.connect(self.onEditingAboutToFinish)
 
         # Handling of the waypoint map tools
         self.addWaypointRequested.connect(
@@ -119,6 +121,16 @@ class WaypointTableWidget(QWidget):
         # self.ui.buttonMoveWaypointUp.setEnabled(bool(rows) and rows[0].row() > 0)
         # self.ui.buttonMoveWaypointDown.setEnabled(bool(rows) \
         #     and rows[-1].row() < len(self._model.items()) - 1)
+
+    @pyqtSlot()
+    def onEditingAboutToFinish(self):
+        editor = self.ui.waypointTable.focusWidget()
+        if editor is None or editor is self.ui.waypointTable:
+            # No open editor
+            return
+
+        self.ui.waypointTable.commitData(editor)
+        self.ui.waypointTable.closeEditor(editor, QAbstractItemDelegate.NoHint)
 
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool):

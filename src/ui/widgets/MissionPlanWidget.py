@@ -45,6 +45,8 @@ class MissionPlanWidget(QWidget):
 
         # Respect edit mode
         self._missionContext.editModeChanged.connect(self.onEditModeChanged)
+        # Make sure any pending changes are submitted
+        self._missionContext.editingAboutToFinish.connect(self.onEditingAboutToFinish)
 
         # Signals for refreshing the task list
         # TODO
@@ -100,6 +102,20 @@ class MissionPlanWidget(QWidget):
         # Reset task button states
         self.onTaskSelectionChanged(None, None)
 
+    @pyqtSlot()
+    def onEditingAboutToFinish(self) -> None:
+        # Parameter changes
+        self._mapper.submit()
+
+        # Task list (description field) changes
+        editor = self.ui.taskList.focusWidget()
+        if editor is None or editor is self.ui.taskList:
+            # No open editor
+            return
+
+        self.ui.taskList.commitData(editor)
+        self.ui.taskList.closeEditor(editor, QAbstractItemDelegate.NoHint)
+
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool) -> None:
         self.ui.missionPlanParameters.setEnabled(editMode)
@@ -107,11 +123,6 @@ class MissionPlanWidget(QWidget):
 
         self.taskListModel.setEditable(editMode)
         self._model.setEditable(editMode)
-        # Close current cell editor, if present. This is primarily for the Description
-        # field
-        cellEditor = self.ui.taskList.focusWidget()
-        if cellEditor is not None:
-            self.ui.taskList.closeEditor(cellEditor, QAbstractItemDelegate.NoHint)
 
     @pyqtSlot(QItemSelection, QItemSelection)
     def onTaskSelectionChanged(self, selected: QItemSelection | None,
