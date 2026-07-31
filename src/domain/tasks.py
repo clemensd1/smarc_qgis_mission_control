@@ -171,9 +171,9 @@ class LoiterTask(Task):
 
 @task("custom-task")
 class CustomTask(Task):
-    action_name: Annotated[str, Column("Action"), JsonKey("action-name")] \
+    action_name: Annotated[str, Column("Action")] \
         = ""
-    json_params: Annotated[str, Column("JSON"), JsonKey("json-params")] \
+    json_params: Annotated[str, Column("JSON")] \
         = ""
 
 
@@ -339,15 +339,15 @@ class SmarcStopModemPingTask(Task):
 
 @task("search-area")
 class SearchAreaTask(Task):
-    area_type: Annotated[AreaTypeParam, Column("Area type"), JsonKey("area-type")] \
+    area_type: Annotated[AreaTypeParam, Column("Area type")] \
         = AreaTypeParam.WATER
     #: Speed as specified in WARA-PS
     speed: Annotated[MovementSpeedParam, Column("Speed")] \
         = MovementSpeedParam.STANDARD
     # TODO: enum?
-    target_type: Annotated[str, Column("Target type"), JsonKey("target-type")] \
+    target_type: Annotated[str, Column("Target type")] \
         = ""
-    target_size: Annotated[float, Column("Target size"), JsonKey("target-size")] \
+    target_size: Annotated[float, Column("Target size")] \
         = 0.0
     area: Annotated[list[GeoPoint], Column("Area")] \
         = field(default_factory = list)
