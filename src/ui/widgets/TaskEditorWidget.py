@@ -61,7 +61,7 @@ class TaskEditorWidget(AutomaticFormWidget):
                 continue
 
             label = QLabel(spec.header(preferLong = True) + ":", self)
-            self._formLayout.addRow(label)
+            self._formLayout.addRow(label, None)
 
             if waypointCls is not None:
                 editor = WaypointFormWidget(taskCls, spec.name, waypointCls,
@@ -78,6 +78,9 @@ class TaskEditorWidget(AutomaticFormWidget):
             self._editors.append(editor)
 
         self._mapper.toFirst()
+
+        # Respect edit mode
+        missionContext.editModeChanged.connect(self.setEditMode)
 
     def _addScalarField(self, spec, column: int):
         label = QLabel(self)
@@ -108,3 +111,12 @@ class TaskEditorWidget(AutomaticFormWidget):
 
         for editor in self._editors:
             editor.unbind()
+
+    def _setFieldWidgetEditMode(self, fieldWidget: QWidget, editMode: bool):
+        match fieldWidget:
+            case WaypointFormWidget() | WaypointTableWidget():
+                # They handle edit mode changes themselves
+                pass
+            case _:
+                # Normal editor widgets
+                super()._setFieldWidgetEditMode(fieldWidget, editMode)

@@ -136,6 +136,7 @@ class WaypointTableWidget(QWidget):
     def onEditModeChanged(self, editMode: bool):
         self._model.setEditable(editMode)
         self.ui.waypointTableSideBar.setEnabled(editMode)
+        self.ui.waypointTable.setEnabled(editMode)
 
     @pyqtSlot(bool)
     def onAddWaypointToggled(self, state: bool):
