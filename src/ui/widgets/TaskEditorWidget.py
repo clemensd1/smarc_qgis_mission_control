@@ -71,6 +71,8 @@ class TaskEditorWidget(AutomaticFormWidget):
 
         # Respect edit mode
         missionContext.editModeChanged.connect(self.setEditMode)
+        # Make sure any pending changes are submitted
+        missionContext.editingAboutToFinish.connect(self._mapper.submit)
 
     def _addScalarField(self, spec, column: int):
         label = QLabel(self)
