@@ -49,14 +49,8 @@ class MissionPlanWidget(QWidget):
         self._missionContext.editingAboutToFinish.connect(self.onEditingAboutToFinish)
 
         # Signals for refreshing the task list
-        # TODO
-        def resetTaskList():
-            self.taskListModel.beginResetModel()
-            self.taskListModel.endResetModel()
-            self.onTaskSelectionChanged(None, None)
-
-        self._missionContext.taskListModified.connect(resetTaskList)
         self._missionContext.taskAdded.connect(self.onTaskAdded)
+        self._missionContext.taskDeleted.connect(self.onTaskDeleted)
 
         # Setup icons for the task buttons
         self.ui.buttonAddTask.setIcon(QgsApplication.getThemeIcon("symbologyAdd.svg"))
@@ -177,11 +171,31 @@ class MissionPlanWidget(QWidget):
             index = rows[0].row()
             doc.deleteTaskAt(index)
 
+    def _resetTaskList(self):
+        self.taskListModel.beginResetModel()
+        self.taskListModel.endResetModel()
+        self.onTaskSelectionChanged(None, None)
+
     @pyqtSlot(UUID, int)
     def onTaskAdded(self, taskUuid: UUID, row: int):
+        # TODO: be more smart about updating the task list
+        self._resetTaskList()
+
+        # Select the newly added task
         index = self.taskListModel.index(row, 0)
         self.ui.taskList.setCurrentIndex(index)
         self.ui.taskList.scrollTo(index)
+
+    def onTaskDeleted(self, taskUuid: UUID, row: int):
+        # TODO: be more smart about updating the task list
+        self._resetTaskList()
+
+        # Select the next task, or the last one
+        row = min(self.taskListModel.rowCount() - 1, row)
+        if row >= 0:
+            index = self.taskListModel.index(row, 0)
+            self.ui.taskList.setCurrentIndex(index)
+            self.ui.taskList.scrollTo(index)
 
     def activateEditorForTask(self, task):
         if task is None:
