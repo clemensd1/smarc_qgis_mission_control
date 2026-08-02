@@ -59,7 +59,8 @@ class FieldSpec:
 
     def jsonName(self) -> str:
         if self.jsonKey is None:
-            return self.name
+            # Automatically convert snake_case to kebab-case
+            return self.name.replace("_", "-")
         return self.jsonKey.name
 
     def choices(self) -> list[Enum] | None:
