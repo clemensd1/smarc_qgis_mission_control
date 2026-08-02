@@ -4,6 +4,7 @@ import json
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject
 from qgis.core import QgsProject, QgsPointXY
+from qgis.utils import iface
 
 from .MissionMapManager import MissionMapManager
 from .MissionDocument import MissionDocument
@@ -105,6 +106,9 @@ class MissionContext(QObject):
         doc = self.activeDocument()
         assert(doc)
         self._bindDocument(doc)
+
+        # Activate the corresponding waypoint layer
+        iface.setActiveLayer(doc.layerBridge.waypointLayer)
 
         self.activeMissionChanged.emit(doc)
 
