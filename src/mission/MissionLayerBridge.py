@@ -10,6 +10,7 @@ from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
 from ..domain.tasks import Task
 from ..domain.taskspatial import iterTaskWaypoints
+from .MissionTracks import MissionTracks
 
 
 __all__ = ["MissionLayerBridge"]
@@ -55,8 +56,7 @@ class MissionLayerBridge(QObject):
 
     _layerGroup: QgsLayerTreeGroup
     waypointLayer: QgsVectorLayer
-    trackLayer: QgsVectorLayer
-
+    tracks: MissionTracks
 
     def __init__(self, plan: MissionPlan, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -129,6 +129,11 @@ class MissionLayerBridge(QObject):
 
         self.waypointLayer.editCommandStarted.connect(self.onEditCommandStarted)
         self.waypointLayer.editCommandEnded.connect(self.onEditCommandEnded)
+
+        # Setup the tracks layer
+        # Use same color as the waypoint layer
+        color = self.waypointLayer.renderer().symbol().color()
+        self.tracks = MissionTracks(self.parent(), self._layerGroup, color, self)
 
     def _populateLayers(self, plan: MissionPlan) -> None:
         for task in plan.tasks:
