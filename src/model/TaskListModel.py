@@ -5,24 +5,38 @@ from qgis.PyQt.QtWidgets import *
 from qgis.gui import *
 from qgis.core import *
 
+from uuid import UUID
+
 from ..domain.tasks import Task
-from ..domain.missionplan import MissionPlan
+from ..mission.MissionDocument import MissionDocument
 from .ItemBasedModel import ItemBasedModel
 
 __all__ = ["TaskListModel"]
 
 class TaskListModel(ItemBasedModel):
-    _plan: MissionPlan | None
+    _doc: MissionDocument | None
     _items: list[Task]
     _columns: list[str] = ["Description", "Type"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._plan = None
+        self._doc = None
 
-    def setMissionPlan(self, plan: MissionPlan | None):
-        self._plan = plan
-        self.setItems(plan.tasks if plan else [])
+    def bind(self, doc: MissionDocument) -> None:
+        self.unbind()
+
+        self._doc = doc
+
+        self.setItems(self._doc.plan.tasks)
+
+        self._doc.taskChanged.connect(self.onTaskChanged)
+
+    def unbind(self) -> None:
+        if self._doc is not None:
+            self._doc.taskChanged.disconnect(self.onTaskChanged)
+
+        self._doc = None
+        self.setItems([])
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._columns)
@@ -62,17 +76,36 @@ class TaskListModel(ItemBasedModel):
 
     def setData(self, index: QModelIndex, value: QVariant,
                 role: int = Qt.EditRole) -> bool:
-        if role != Qt.EditRole:
+        if role != Qt.EditRole or not self.isEditable() or self._doc is None:
             return False
 
         task = self._items[index.row()]
         col = index.column()
         if col == 0:
-            task.description = str(value)
-            self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+            self._doc.setTaskDescription(task.uuid, str(value))
             return True
         else:
             # TODO: report an error, this is a bug; only task description can be changed
             pass
 
         return False
+
+    def _rowForUuid(self, taskUuid: UUID) -> int | None:
+        for row, task in enumerate(self.items()):
+            if task.uuid == taskUuid:
+                return row
+        return None
+
+    @pyqtSlot(UUID)
+    def onTaskChanged(self, taskUuid: UUID) -> None:
+        if self._doc is None:
+            return
+
+        taskIndex = self._rowForUuid(taskUuid)
+        if taskIndex is None:
+            # TODO: change to a task not managed by this model? This shouldn't happen
+            return
+
+        idxStart = self.index(taskIndex, 0)
+        idxEnd = self.index(taskIndex, self.columnCount() - 1)
+        self.dataChanged.emit(idxStart, idxEnd, [Qt.DisplayRole, Qt.EditRole])

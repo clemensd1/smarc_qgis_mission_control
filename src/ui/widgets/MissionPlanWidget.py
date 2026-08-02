@@ -95,8 +95,7 @@ class MissionPlanWidget(QWidget):
 
     @pyqtSlot(MissionDocument)
     def onActiveMissionChanged(self, doc: MissionDocument) -> None:
-        # TODO: accept doc like other models
-        self.taskListModel.setMissionPlan(doc.plan)
+        self.taskListModel.bind(doc)
         self._model.bind(doc)
         self._mapper.toFirst()
         # Reset task button states

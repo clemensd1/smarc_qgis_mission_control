@@ -40,27 +40,3 @@ class SchemaBasedModel(ItemBasedModel): # TODO: integrate with undo/redo stack
         spec = self._schema.fields[index.column()]
         # TODO: always str?
         return str(spec.value(item))
-
-    def setData(self, index: QModelIndex, value: QVariant,
-                role: int = Qt.EditRole) -> bool:
-        if role != Qt.EditRole:
-            return False
-
-        item = self._items[index.row()]
-
-        # retrieve the field specification for schema object
-        spec = self._schema.fields[index.column()]
-        # retrieve original value (->type)
-        original = spec.value(item)
-
-        # cast the incoming object to the original type # TODO: move type checks to MissionDocument after undo/redo stack implementation
-        try:
-            typed_value = spec.type()(value) # instead of type(original)(value)
-        except (ValueError, TypeError):
-            return False  # reject invalid input
-
-        spec.setValue(item, typed_value)
-        # TODO: or [role]?
-        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
-
-        return True
