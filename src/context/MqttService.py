@@ -67,7 +67,6 @@ class MqttService(QObject):
         super().__init__(parent)
         self._context = ""
         self._vehicles: dict[str, dict] = {}
-        self._connected = False
         self._connect_rc = None
 
         self._connect_event = threading.Event()
@@ -81,10 +80,7 @@ class MqttService(QObject):
     def connect(self, ip: str, port: int, username: str | None, password: str | None,
                 context: str, timeout: float = 5):        
         self.disconnect() # if this is called, self._client -> NoneType
-        self._connected = False
-
-        print("Connecting to MQTT...")
-
+                    
         # Always create a fresh client
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self._client.on_connect = self.onMqttConnect
@@ -100,18 +96,16 @@ class MqttService(QObject):
         self._client.username_pw_set(username, password)
 
         try:
+            print("Connecting to MQTT...")
             # self._client.connect_async(ip, port)
             self._client.connect(ip, port, keepalive=60)
-            self._connected = True
         except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as e:
-            self._connected = False
             self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
             raise ConnectionError(f"Could not connect to MQTT broker: {e}") from e
 
         self._client.loop_start()
 
         if not self._connect_event.wait(timeout):
-            self._connected = False
             self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
             raise TimeoutError("MQTT connection attempt timed out")
 
@@ -124,7 +118,6 @@ class MqttService(QObject):
         try:
             print("Disconnecting from MQTT...")
             self._client.disconnect()
-            self._connected = False
         except Exception:
             pass
         finally:
@@ -139,23 +132,19 @@ class MqttService(QObject):
             print("subscribing to context:", self._context)
             client.subscribe(self._context)
 
-            self._connected = True
             self.connectionStateChanged.emit(MqttConnectionState.CONNECTED)
         else:
-            self._connected = False
             self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
             print(f"MQTT connection rejected: {reason_code}")
 
         self._connect_event.set()
 
     def onMqttConnectFail(self, client, userdata):
-        self._connected = False
         self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
         print("MQTT connection failed")
         self._connect_event.set()
 
     def onMqttDisconnect(self, client, userdata, flags, reason_code, properties):
-        self._connected = False
         self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
         print(f"MQTT disconnected: {reason_code}")
 
