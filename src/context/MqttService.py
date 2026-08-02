@@ -80,14 +80,8 @@ class MqttService(QObject):
 
     def connect(self, ip: str, port: int, username: str | None, password: str | None,
                 context: str, timeout: float = 5):        
-        # Cleanly close any existing connections first
-        if self._client is not None:
-            self._client.loop_stop()
-        try:
-            self._client.disconnect() # if this is called, self._client -> NoneType
-        except Exception:
-            pass
-        self._client = None
+        self.disconnect() # if this is called, self._client -> NoneType
+        self._connected = False
 
         print("Connecting to MQTT...")
 
@@ -125,10 +119,10 @@ class MqttService(QObject):
             raise ConnectionError(f"MQTT connection rejected: {self._connect_rc}")
 
     def disconnect(self):
-        print("Disconnecting from MQTT...")
         if self._client is None:
             return
         try:
+            print("Disconnecting from MQTT...")
             self._client.disconnect()
             self._connected = False
         except Exception:
