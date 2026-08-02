@@ -308,4 +308,25 @@ class MissionLayerBridge(QObject):
         point = QgsPointXY(longitude, latitude)
         self.waypointLayer.changeGeometry(fid, QgsGeometry.fromPointXY(point))
 
-    # TODO: cleanup method for MissionPlanLayers
+    def cleanup(self) -> None:
+        qgs = QgsProject.instance()
+
+        try:
+            layerId = self.waypointLayer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        try:
+            layerId = self.tracks._layer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        root = QgsProject.instance().layerTreeRoot()
+
+        self._layerGroup.parent().removeChildNode(self._layerGroup)

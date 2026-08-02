@@ -131,16 +131,8 @@ class MissionContext(QObject):
         self.editingAboutToFinish.emit()
 
     def cleanup(self) -> None:
-        qgs = QgsProject.instance()
-
         for doc in self._missionDocuments.values():
-            try:
-                layerId = doc.layerBridge.waypointLayer.id()
-            except RuntimeError:
-                # Layer may have been removed externally, e.g. during QGIS shutdown
-                pass
-            else:
-                qgs.removeMapLayer(layerId)
+            doc.layerBridge.cleanup()
 
         self._missionDocuments.clear()
         self._activeDocument = None
