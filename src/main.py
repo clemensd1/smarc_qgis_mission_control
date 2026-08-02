@@ -152,7 +152,7 @@ class SMaRCMissionControlPlugin(QObject):
         try:
             # TODO: subscribing to certain context other than #
             self.fleetContext.mqtt.connect(ip, port, user, pw, ctx)
-            self.set_mqtt_button_style(self.fleetContext.mqtt._connected)
+            self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
         except Exception as e:
             self.set_mqtt_button_style(False)
             QMessageBox.warning(
@@ -164,4 +164,4 @@ class SMaRCMissionControlPlugin(QObject):
 
     def _onMqttDisconnect(self):
         self.fleetContext.mqtt.disconnect()
-        self.set_mqtt_button_style(self.fleetContext.mqtt._connected)
+        self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
