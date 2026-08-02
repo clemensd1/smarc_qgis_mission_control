@@ -25,9 +25,6 @@ class MissionDocument(QObject):
     editingStarted = pyqtSignal()
     editingFinished = pyqtSignal()
 
-    # TODO: remove
-    taskListModified = pyqtSignal()
-
     # TODO: not very precise
     missionChanged = pyqtSignal()
 
@@ -172,7 +169,6 @@ class MissionDocument(QObject):
 
         self.plan.tasks.insert(index, task)
         self.index.registerTask(task)
-        self.taskListModified.emit()
 
         self.taskAdded.emit(task.uuid, index)
 
@@ -195,9 +191,14 @@ class MissionDocument(QObject):
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
     def _deleteTaskAt(self, index: int):
-        task = self.plan.tasks.pop(index)
+        task = self.plan.tasks[index]
+
+        self.beforeTaskDeleted.emit(task.uuid)
+
+        self.plan.tasks.pop(index)
         self.index.forgetTask(task.uuid)
-        self.taskListModified.emit()
+
+        self.taskDeleted.emit(task.uuid, index)
 
     # TODO: move task to a specific index
     # def moveTask(self, taskUuid: UUID, index: int): ...
