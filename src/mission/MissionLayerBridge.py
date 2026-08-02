@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
-from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY
+from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY, QgsLayerTreeGroup
 
 from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
@@ -41,7 +41,8 @@ class MissionLayerBridge(QObject):
         QGIS_EDIT_COMMAND = 'qgis-edit-command'
         CUSTOM_EDIT_COMMAND = 'custom-edit-command'
         REPLAYING_QGIS_COMMAND = 'replaying-qgis-command'
-    SMARC_WP_GROUP_NAME = 'SMaRCMissionWaypoints'
+
+    SMARC_GROUP_NAME = 'SMaRCMissions'
 
     waypointMoved = pyqtSignal(UUID, QgsPointXY)
     waypointAdded = pyqtSignal(UUID, UUID, QgsPointXY)
@@ -52,6 +53,7 @@ class MissionLayerBridge(QObject):
     _state: State
     _journal: list[JournalEntry]
 
+    _layerGroup: QgsLayerTreeGroup
     waypointLayer: QgsVectorLayer
     trackLayer: QgsVectorLayer
 
@@ -64,8 +66,29 @@ class MissionLayerBridge(QObject):
         self._state = self.State.DEFAULT
         self._journal = []
 
+        self._setupLayerGroup(plan.uuid)
         self._initializeLayers(plan.uuid)
         self._populateLayers(plan)
+
+    def _setupLayerGroup(self, planUuid: UUID) -> None:
+        # Find or create the SMaRCMissions group at the top of the layer tree
+        qgs = QgsProject.instance()
+        root = qgs.layerTreeRoot()
+        smarcgroup = root.findGroup(self.SMARC_GROUP_NAME)
+        if smarcgroup is None:
+            smarcgroup = root.insertGroup(0, self.SMARC_GROUP_NAME)
+
+        # Find or create group for this mission plan
+        name = f"{planUuid}"
+        layerGroup = root.findGroup(name)
+        if layerGroup is None:
+            layerGroup = smarcgroup.insertGroup(0, name)
+        else:
+            # Make sure it's clear of any leftover layers
+            print(layerGroup, layerGroup.findLayers())
+            qgs.removeMapLayers([node.layer() for node in layerGroup.findLayers()])
+
+        self._layerGroup = layerGroup
 
     def _initializeLayers(self, planUuid: UUID) -> None:
         """
@@ -76,15 +99,9 @@ class MissionLayerBridge(QObject):
         """
 
         # Setup waypoint layer
-        qgs = QgsProject.instance()
-        # Remove any stale layers
-        matching = qgs.mapLayersByName(f'{self.SMARC_WP_GROUP_NAME}-{planUuid}')
-        qgs.removeMapLayers([l.id() for l in matching])
-
-        # Setup our layer
         self.waypointLayer = QgsVectorLayer(
             'point?crs=epsg:4326', # IMPORTANT: layer crs set to espg:4326
-            f'{self.SMARC_WP_GROUP_NAME}-{planUuid}',
+            f'Waypoints',
             'memory'
         )
         self.waypointLayer.dataProvider().addAttributes([
@@ -94,22 +111,18 @@ class MissionLayerBridge(QObject):
         ])
         self.waypointLayer.updateFields()
 
-        qgs.addMapLayer(self.waypointLayer, False)
-
         # Make the layer non-removable (by users)
         flags = self.waypointLayer.flags()
         flags &= ~self.waypointLayer.LayerFlag.Removable
         self.waypointLayer.setFlags(flags)
 
-        # Find or create the f"{self.SMARC_WP_GROUP_NAME}" group at  top of the layer tree
-        root = QgsProject.instance().layerTreeRoot()
-        wp_group = root.findGroup(f"{self.SMARC_WP_GROUP_NAME}")
-        if wp_group is None:
-            wp_group = root.insertGroup(0, f"{self.SMARC_WP_GROUP_NAME}")
-        wp_group.addLayer(self.waypointLayer)
+        # Register the layer with QGIS and add it to the group
+        QgsProject().instance().addMapLayer(self.waypointLayer, False)
+        self._layerGroup.addLayer(self.waypointLayer)
 
         #TODO auto-select/highlight newly created layer
 
+        # Register layer callbacks
         self.waypointLayer.featureAdded.connect(self.onFeatureAdded)
         self.waypointLayer.featureDeleted.connect(self.onFeatureDeleted)
         self.waypointLayer.geometryChanged.connect(self.onGeometryChanged)
