@@ -34,6 +34,9 @@ class SMaRCMissionControlPlugin(QObject):
                     "password": "",
                     "context": "#",
                 },
+                "wara-ps": {
+                    "sender": "QGIS-MissionControl",
+                }
         }
 
         # set path and path to svg files
@@ -192,6 +195,10 @@ class SMaRCMissionControlPlugin(QObject):
                 json.dump(self.user_settings, f, indent=4)
         with open(self.settings_file_path, "r") as f:
             self.user_settings = json.load(f)
+
+        self.fleetContext.mqtt.setSenderId(
+            self.user_settings.get("wara-ps", {}).get("sender", "QGIS-MissionControl")
+        )
         
     @pyqtSlot(bool)
     def onSettingsActionClicked(self, checked: bool):

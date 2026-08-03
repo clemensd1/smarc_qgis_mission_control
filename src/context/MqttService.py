@@ -67,6 +67,7 @@ class MqttService(QObject):
         self._context = ""
         self._vehicles: dict[str, dict] = {}
         self._connect_rc = None
+        self._senderId = "QGIS-MissionControl"  # default, overridable via setSenderId()
 
         self._connect_event = threading.Event()
 
@@ -122,6 +123,9 @@ class MqttService(QObject):
         finally:
             self._client.loop_stop()
             self._client = None
+
+    def setSenderId(self, senderId: str):
+        self._senderId = senderId or "QGIS-MissionControl"
 
     def onMqttConnect(self, client, userdata, flags, reason_code, properties):
         self._connect_rc = reason_code
@@ -241,7 +245,7 @@ class MqttService(QObject):
                 },
             },
             "com-uuid": str(uuid4()),
-            "sender": "QGIS-MissionControl",
+            "sender": self._senderId,
         }
         self._client.publish(topic, json.dumps(data))
 
@@ -265,7 +269,7 @@ class MqttService(QObject):
             'unit': f'/{receiver}',
             'command': 'signal-unit',
             'com-uuid': str(uuid4()),
-            'sender': 'QGIS-MissionControl',
+            'sender': self._senderId,
         }
         self._client.publish(topic, json.dumps(data))
 
@@ -289,7 +293,7 @@ class MqttService(QObject):
             'unit': f'/{receiver}',
             'command': 'signal-unit',
             'com-uuid': str(uuid4()),
-            'sender': 'QGIS-MissionControl',
+            'sender': self._senderId,
         }
         self._client.publish(topic, json.dumps(data))
 
@@ -312,7 +316,7 @@ class MqttService(QObject):
             'task-uuid': str(taskUuid),
             'command': 'signal-task',
             'com-uuid': str(uuid4()),
-            'sender': 'QGIS-MissionControl',
+            'sender': self._senderId,
         }
         self._client.publish(topic, json.dumps(data))
 
@@ -336,6 +340,6 @@ class MqttService(QObject):
             'unit': f'/{receiver}',
             'command': 'signal-unit',
             'com-uuid': str(uuid4()),
-            'sender': 'QGIS-MissionControl',
+            'sender': self._senderId,
         }
         self._client.publish(topic, json.dumps(data))
