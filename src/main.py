@@ -170,43 +170,20 @@ class SMaRCMissionControlPlugin(QObject):
 
     @pyqtSlot(bool)
     def onMqttActionClicked(self, checked: bool):
-        dialog = MqttConnectionDialog(self.iface.mainWindow())
+        self.dialog = MqttConnectionDialog(self.iface.mainWindow())
+
         # fill in the fields from the settings file if possible
         self.loadSettings()
 
-        dialog.setIp(self.user_settings.get("mqtt", {}).get("host", ""))
-        dialog.setPort(self.user_settings.get("mqtt", {}).get("port", 1883))
-        dialog.setUsername(self.user_settings.get("mqtt", {}).get("username", ""))
-        dialog.setPassword(self.user_settings.get("mqtt", {}).get("password", ""))
-        dialog.setContext(self.user_settings.get("mqtt", {}).get("context", "+"))
+        self.dialog.setIp(self.user_settings.get("mqtt", {}).get("host", ""))
+        self.dialog.setPort(self.user_settings.get("mqtt", {}).get("port", 1883))
+        self.dialog.setUsername(self.user_settings.get("mqtt", {}).get("username", ""))
+        self.dialog.setPassword(self.user_settings.get("mqtt", {}).get("password", ""))
+        self.dialog.setContext(self.user_settings.get("mqtt", {}).get("context", "+"))
 
-        if dialog.exec() != QDialog.Accepted:
-            return
-        
-        context = dialog.context()
-        if context == "#":
-            context = "+"
-            print("Warning: MQTT context set to '#', this only works if its at the end of a topic, context is not. Replacing with '+' instead.")
-        
-        try:
-            self.fleetContext.mqtt.connect(
-                dialog.ip(),
-                dialog.port(),
-                dialog.username(),
-                dialog.password(),
-                context,
-            )
-        except Exception as e:
-            self.set_mqtt_button_style(False)
-            QMessageBox.warning(
-                self.iface.mainWindow(),
-                "MQTT connection failed",
-                str(e),
-            )
-            return
-
-        self.set_mqtt_button_style(True)
-
+        self.dialog.connectRequested.connect(self._onMqttConnect)
+        self.dialog.disconnectRequested.connect(self._onMqttDisconnect)
+        self.dialog.exec()
 
     def loadSettings(self):
         if not os.path.exists(self.settings_file_path):
@@ -215,8 +192,6 @@ class SMaRCMissionControlPlugin(QObject):
                 json.dump(self.user_settings, f, indent=4)
         with open(self.settings_file_path, "r") as f:
             self.user_settings = json.load(f)
-        
-
         
     @pyqtSlot(bool)
     def onSettingsActionClicked(self, checked: bool):
@@ -228,4 +203,30 @@ class SMaRCMissionControlPlugin(QObject):
                 "Could not open settings file",
                 str(e),
             )
-        
+
+    def _onMqttConnect(self, ip, port, username, password, context):
+        if context == "#":
+            context = "+"
+            print("Warning: MQTT context set to '#', this only works if its at the end of a topic, context is not. Replacing with '+' instead.")
+
+        try:
+            self.fleetContext.mqtt.connect(
+                ip,
+                port,
+                username,
+                password,
+                context,
+            )
+            self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
+        except Exception as e:
+            self.set_mqtt_button_style(False)
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "MQTT connection failed",
+                str(e),
+            )
+            return
+
+    def _onMqttDisconnect(self):
+        self.fleetContext.mqtt.disconnect()
+        self.set_mqtt_button_style(False)
