@@ -22,6 +22,7 @@ class FleetControlWidget(QFrame):
     abortMissionRequested = pyqtSignal(set)
     emergencyRequested = pyqtSignal(set)
     resetEmergencyRequested = pyqtSignal(set)
+    clearTracksRequested = pyqtSignal()
 
     def __init__(self, fleetState: FleetState, mapManager, parent: QWidget | None = None):
         super().__init__(parent)
@@ -64,6 +65,7 @@ class FleetControlWidget(QFrame):
         # Helper buttons
         self.ui.selectAllButton.clicked.connect(self.selectAll)
         self.ui.deselectAllButton.clicked.connect(self.deselectAll)
+        self.ui.clearTracksButton.clicked.connect(self.onClearTracksClicked)
         self.ui.collapseAllButton.clicked.connect(self.collapseAll)
         self.ui.expandAllButton.clicked.connect(self.expandAll)
 
@@ -126,6 +128,7 @@ class FleetControlWidget(QFrame):
             self.ui.deselectAllButton.setEnabled(False)
             self.ui.collapseAllButton.setEnabled(False)
             self.ui.expandAllButton.setEnabled(False)
+            self.ui.clearTracksButton.setEnabled(False)
             self.ui.vehicleControls.setEnabled(False)
             self.ui.vehiclesSelectedLabel.setText("No vehicles selected")
         else:
@@ -150,6 +153,8 @@ class FleetControlWidget(QFrame):
             else:
                 text = "No vehicles selected"
             self.ui.vehiclesSelectedLabel.setText(text)
+
+            self.ui.clearTracksButton.setEnabled(True)
 
     @pyqtSlot()
     def onUploadMissionPlanClicked(self):
@@ -225,6 +230,12 @@ class FleetControlWidget(QFrame):
         self.ui.vehicleListVLayout.addWidget(card)
         self._vehicles[vehicle] = card
 
+        # Sync collapsed state with what the card initializes to
+        if card.isCollapsed():
+            self._collapsed.add(vehicle)
+        else:
+            self._collapsed.discard(vehicle)
+
         self._refreshUiState()
 
     @pyqtSlot(str)
@@ -241,3 +252,7 @@ class FleetControlWidget(QFrame):
     def onVehicleHeartbeat(self, vehicleTopic: str):
         if vehicleTopic in self._vehicles:
             self._vehicles[vehicleTopic].onHeartbeat()
+
+    @pyqtSlot()
+    def onClearTracksClicked(self):
+        self.clearTracksRequested.emit()
