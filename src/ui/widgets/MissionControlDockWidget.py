@@ -84,6 +84,11 @@ class MissionControlDockWidget(QgsDockWidget):
         #     '/opt/workspace/references/mission-plans/seq-AllTasks.json'
         # )
 
+        # Setup clearTracks signal from FleetControlWidget to FleetContext.mapManager
+        self.ui.tabFleetControl.clearTracksRequested.connect(
+            self.ui.tabLiveView.clearTracks
+        )
+
         # Setup mission plan controls
         self.ui.buttonEditMissionPlan.setIcon(
             QgsApplication.getThemeIcon("mActionToggleEditing.svg")
