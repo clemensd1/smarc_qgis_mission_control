@@ -1,105 +1,117 @@
-from typing import (get_type_hints, get_args,
-                    Type, ClassVar, Annotated)
-from dataclasses import dataclass, field, fields
+from typing import TYPE_CHECKING, Annotated, ClassVar, TypeVar, Type, Callable, cast
+from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 from ..compat import StrEnum
-from .schema import Schema, SchemaMixin, Unit, Column
+from .jsoncodec import JsonCodec
+from .schema import SchemaMixin, FieldSpec, Unit, Column, JsonKey
 from .waypoints import *
+
 
 __all__ = [
     "Task",
-    "TaskType",
     "TaskRegistry",
-
-    "WaypointTask",
-    "SingleWaypointTask",
-    "MultiWaypointTask",
+    "task",
+    "PendingWaypointTask",
+    "UnsupportedTaskCreationError"
 ]
 
-class TaskType(StrEnum):
-    """Supported task types. Ordering here influences ordering in the UI."""
 
-    # WARA-PS
-    MOVE_TO     = "move-to"
-    MOVE_PATH   = "move-path"
-    # SEARCH_AREA = "search-area"
+TaskInstanceT = TypeVar("TaskInstanceT", bound="Task")
+TaskT = TypeVar("TaskT", bound=Type["Task"])
 
-    # Custom tasks
-    AUV_DEPTH_MOVE_TO   = "auv-depth-move-to"
-    AUV_DEPTH_MOVE_PATH = "auv-depth-move-path"
-    # AUV_SPIRAL_TO_DEPTH = "auv-spiral-to-depth"
-    LOITER              = "loiter"
-    # DEPLOY_PAYLOAD  = "deploy-payload"
-    CUSTOM              = "custom-task"
 
-@dataclass
+@dataclass(kw_only=True)
 class Task(SchemaMixin):
     """
-    This class represent a single task. All other task classes subclass from this. Each
-    task has a description, a unique ID and a type associated with it. Tasks can also
-    define parameters, which have to be `Annotated`, just like `Waypoint` parameters.
+    This class represents a single task. Task parameters are the annotated fields
+    declared by each task subclass.
     """
     description : str
     #: Task UUID is either loaded, or automatically generated.
-    uuid        : UUID = field(default_factory = uuid4, kw_only = True)
-    #: Type is filled in by subclasses.
-    type        : ClassVar[TaskType]
-
-    @classmethod
-    def fromJson(cls, data: dict):
-        # This should always be overwritten, as type field determines the subclass
-        raise NotImplementedError
+    uuid        : UUID = field(default_factory = uuid4)
+    #: Type is set by subclasses.
+    type        : ClassVar[str]
 
     def toJson(self) -> dict:
         return {
             "description": self.description,
             "task-uuid": str(self.uuid),
             # Confusingly, `type` is stored as `name`
-            "name": str(self.type)
+            "name": self.type,
+            "params": JsonCodec.encodeSchema(self)
         }
 
+    @classmethod
+    def fromJson(cls: Type[TaskInstanceT], data: dict) -> TaskInstanceT:
+        if data["name"] != cls.type:
+            raise TypeError(f"{cls.__name__} got JSON for type '{data['name']}' but " \
+                            f"expected type '{cls.type}'")
+
+        return JsonCodec.decodeSchema(cls, data["params"], extra_kwargs = {
+            "description": str(data["description"]),
+            "uuid": UUID(data["task-uuid"])
+        })
+
+
 class TaskRegistry:
-    registry: dict[TaskType, Type[Task]] = {}
+    registry: dict[str, Type[Task]] = {}
 
     @classmethod
-    def register(cls, taskCls: Type[Task]) -> Type[Task]:
-        prevCls = cls.registry.get(taskCls.type)
+    def register(cls, typeId: str, taskCls: Type[Task]) -> None:
+        prevCls = cls.registry.get(typeId)
         if prevCls:
-            raise ValueError(f"Duplicate task type '{taskCls.type}' for "
+            raise ValueError(f"Duplicate task type '{typeId}' for "
                              f"{taskCls.__name__} and {prevCls.__name__}")
-        cls.registry[taskCls.type] = taskCls
 
-        return taskCls
+        cls.registry[typeId] = taskCls
 
     @classmethod
-    def lookup(cls, type: TaskType) -> Type[Task]:
-        if not type in cls.registry:
-            raise KeyError(f"Unknown task type '{type}'")
-        return cls.registry[type]
+    def lookup(cls, typeId: str) -> Type[Task]:
+        try:
+            return cls.registry[typeId]
+        except KeyError:
+            raise KeyError(f"Unknown task type '{typeId}'") from None
 
-@dataclass
-class WaypointTask(Task):
-    """Represents a task defined by any number of waypoints."""
-    waypointClass: ClassVar[Type[Waypoint]]
+    @classmethod
+    def taskFromJson(cls, data: dict) -> Task:
+        # NOTE: task "name" is actually the type, e.g. move-to
+        return cls.lookup(data["name"]).fromJson(data)
 
-@dataclass
-class SingleWaypointTask(WaypointTask):
-    """Represents a task defined by a single waypoint."""
-    waypoint: Waypoint
 
-    @dataclass
-    class Pending:
-        """A SingleWaypointTask pending creation, awaiting waypoint location."""
-        taskCls: Type['SingleWaypointTask']
-        description: str
-        taskUuid: UUID
-        waypointUuid: UUID
+if TYPE_CHECKING:
+    from typing_extensions import dataclass_transform
+else:
+    def dataclass_transform(*args, **kwargs):
+        return lambda x: x
 
-@dataclass
-class MultiWaypointTask(WaypointTask):
-    """Represents a task defined by multiple waypoints."""
-    waypoints: list[Waypoint] = field(default_factory = list)
+
+@dataclass_transform(kw_only_default=True)
+def task(typeId: str) -> Callable[[TaskT], TaskT]:
+    def decorate(taskCls: TaskT) -> TaskT:
+        if not issubclass(taskCls, Task):
+            raise TypeError(f"@task classes must subclass {Task.__name__}")
+
+        taskCls = cast(TaskT, dataclass(kw_only=True)(taskCls))
+        taskCls.type = typeId
+
+        TaskRegistry.register(typeId, taskCls)
+        return taskCls
+    return decorate
+
+
+@dataclass(frozen=True)
+class PendingWaypointTask:
+    taskCls: Type[Task]
+    fieldName: str
+    waypointCls: Type[Waypoint]
+    description: str
+    taskUuid: UUID
+    waypointUuid: UUID
+
+
+class UnsupportedTaskCreationError(ValueError):
+    pass
 
 ###############################################################################
 # Define your tasks below here
@@ -112,160 +124,230 @@ class MovementSpeedParam(StrEnum):
     STANDARD = "standard"
     FAST     = "fast"
 
-@TaskRegistry.register
-@dataclass
-class MoveToTask(SingleWaypointTask):
-    type          = TaskType.MOVE_TO
-    waypointClass = GeoPoint
+class SuccorModeParam(StrEnum):
+    # as defined in utilities/serial_ping_pkg/.../modem_ping_estimator_node
+    ADD = "add"
+    REMOVE = "remove"
+    CLEAR = "clear"
+    PING = "ping"
 
-    # Task Parameters
+class AreaTypeParam(StrEnum):
+    # WARA-PS
+    WATER = "water"
+    BEACH = "beach"
+    FOREST = "forest"
+    FIELD = "field"
+
+
+@task("move-to")
+class MoveToTask(Task):
     #: Speed as specified in WARA-PS
     speed: Annotated[MovementSpeedParam, Column("Speed")] \
-         = MovementSpeedParam.STANDARD
+        = MovementSpeedParam.STANDARD
+    waypoint: Annotated[GeoPoint, Column("Waypoint")]
 
-    @classmethod
-    def fromJson(cls, data: dict) -> 'MoveToTask':
-        assert(data["name"] == str(cls.type))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            waypoint = GeoPoint.fromJson(data["params"]["waypoint"]),
-            speed = MovementSpeedParam(data["params"]["speed"]),
-        )
-
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "speed": str(self.speed),
-                "waypoint": self.waypoint.toJson()
-            }
-        }
-
-@TaskRegistry.register
-@dataclass
-class MovePathTask(MultiWaypointTask):
-    type          = TaskType.MOVE_PATH
-    waypointClass = GeoPoint
-
-    # Task Parameters
+@task("move-path")
+class MovePathTask(Task):
     #: Speed as specified in WARA-PS
     speed: Annotated[MovementSpeedParam, Column("Speed")] \
-         = MovementSpeedParam.STANDARD
+        = MovementSpeedParam.STANDARD
+    waypoints: Annotated[list[GeoPoint], Column("Waypoints")] \
+        = field(default_factory = list)
 
-    @classmethod
-    def fromJson(cls, data: dict) -> 'MovePathTask':
-        assert(data["name"] == str(cls.type))
-        wps = list(map(GeoPoint.fromJson, data["params"]["waypoints"]))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            waypoints = wps,
-            speed = MovementSpeedParam(data["params"]["speed"]),
-        )
+@task("auv-depth-move-to")
+class AUVDepthMoveToTask(Task):
+    waypoint: Annotated[AUVWaypoint, Column("Waypoint")]
 
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "speed": str(self.speed),
-                "waypoints": [w.toJson() for w in self.waypoints]
-            }
-        }
+@task("auv-depth-move-path")
+class AUVDepthMovePathTask(Task):
+    waypoints: Annotated[list[AUVWaypoint], Column("Waypoints")] \
+        = field(default_factory = list)
 
-@TaskRegistry.register
-@dataclass
-class AUVDepthMoveToTask(SingleWaypointTask):
-    type          = TaskType.AUV_DEPTH_MOVE_TO
-    waypointClass = AUVWaypoint
-
-    @classmethod
-    def fromJson(cls, data: dict) -> 'AUVDepthMoveToTask':
-        assert(data["name"] == str(cls.type))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            waypoint = AUVWaypoint.fromJson(data["params"]["waypoint"])
-        )
-
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "waypoint": self.waypoint.toJson()
-            }
-        }
-
-@TaskRegistry.register
-@dataclass
-class AUVDepthMovePathTask(MultiWaypointTask):
-    type          = TaskType.AUV_DEPTH_MOVE_PATH
-    waypointClass = AUVWaypoint
-
-    @classmethod
-    def fromJson(cls, data: dict) -> 'AUVDepthMovePathTask':
-        assert(data["name"] == str(cls.type))
-        wps = list(map(AUVWaypoint.fromJson, data["params"]["waypoints"]))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            waypoints = wps
-        )
-
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "waypoints": [w.toJson() for w in self.waypoints]
-            }
-        }
-
-@TaskRegistry.register
-@dataclass
+@task("loiter")
 class LoiterTask(Task):
-    type = TaskType.LOITER
-
-    # Task Parameters
     #: TODO
     timeout: Annotated[float, Unit("s"), Column("Timeout")] \
-           = .0
+        = .0
 
-    @classmethod
-    def fromJson(cls, data: dict) -> 'LoiterTask':
-        assert(data["name"] == str(cls.type))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            timeout = float(data["params"]["timeout"])
-        )
-
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "timeout": self.timeout
-            }
-        }
-
-@TaskRegistry.register
-@dataclass
+@task("custom-task")
 class CustomTask(Task):
-    type = TaskType.CUSTOM
+    action_name: Annotated[str, Column("Action")] \
+        = ""
+    json_params: Annotated[str, Column("JSON")] \
+        = ""
 
-    action : Annotated[str, Column("Action")] \
-           = ""
-    json   : Annotated[str, Column("JSON")] \
-           = ""
 
-    @classmethod
-    def fromJson(cls, data: dict) -> 'CustomTask':
-        assert(data["name"] == str(cls.type))
-        return cls(
-            description = str(data["description"]),
-            uuid = UUID(data["task-uuid"]),
-            action = str(data["params"]["action-name"]),
-            json = str(data["params"]["json-params"]),
-        )
+#### Geofence Tasks ####
+@task("smarc-start-geofence")
+class SmarcStartGeofenceTask(Task):
+    ceiling_altitude: Annotated[float, Unit("m"), Column("CeilingAltitude")] \
+        = -1.0
+    floor_altitude: Annotated[float, Unit("m"), Column("FloorAltitude")] \
+        = 1.0
+    stay_inside: Annotated[bool, Column("StayInside")] \
+        = True
+    waypoints: Annotated[list[GeoPoint], Column("Waypoints")] \
+        = field(default_factory = list)
 
-    def toJson(self) -> dict:
-        return super().toJson() | {
-            "params": {
-                "action-name": self.action,
-                "json-params": self.json,
-            }
-        }
+@task("smarc-stop-geofence")
+class SmarcStopGeofenceTask(Task):
+    reset_geofence: Annotated[bool, Column("ResetGeofence")] \
+        = True
+    reset_islands: Annotated[bool, Column("ResetIslands")] \
+        = True
+
+@task("smarc-wait")
+class SmarcWaitTask(Task):
+    timeout: Annotated[float, Unit("s"), Column("Timeout")] \
+        = 0.0
+
+@task("smarc-log")
+class SmarcLogTask(Task):
+    log_str: Annotated[str, Column("LogStr")] \
+        = ""
+
+
+
+#### Gimbal Tasks ####
+@task("gimbal-set-rpy")
+class GimbalSetRPYTask(Task):
+    roll: Annotated[float, Unit("°"), Column("Roll")] \
+        = 0.0
+    pitch: Annotated[float, Unit("°"), Column("Pitch")] \
+        = 0.0
+    yaw: Annotated[float, Unit("°"), Column("Yaw")] \
+        = 0.0
+
+@task("gimbal-stop")
+class GimbalStopTask(Task):
+    pass
+
+
+
+
+#### ALARS Tasks ####
+@task("alars-takeoff")
+class AlarsTakeOffTask(Task):
+    pass
+
+@task("alars-land")
+class AlarsLandTask(Task):
+    pass
+
+@task("alars-take-control")
+class AlarsTakeControlTask(Task):
+    pass
+
+@task("alars-release-control")
+class AlarsReleaseControlTask(Task):
+    pass
+
+
+@task("alars-bt")
+class AlarsBTTask(Task):
+    num_retries: Annotated[int, Column("#Retries")] \
+        = 5
+    forward_distance: Annotated[float, Unit("m"), Column("ForwardDistance")] \
+        = 2.0
+    forward_altitude: Annotated[float, Unit("m"), Column("ForwardAltitude")] \
+        = 3.0
+    dipping_altitude: Annotated[float, Unit("m"), Column("DippingAltitude")] \
+        = 7.0
+    raising_altitude: Annotated[float, Unit("m"), Column("RaisingAltitude")] \
+        = 15.0
+    search_position: Annotated[GeoPoint, Column("SearchPosition")]
+
+@task("alars-search")
+class AlarsSearchTask(Task):
+    search_position: Annotated[GeoPoint, Column("SearchPosition")]
+
+@task("alars-recover")
+class AlarsRecoverTask(Task):
+    forward_distance: Annotated[float, Unit("m"), Column("ForwardDistance")] \
+        = 2.0
+    forward_altitude: Annotated[float, Unit("m"), Column("ForwardAltitude")] \
+        = 3.0
+    dipping_altitude: Annotated[float, Unit("m"), Column("DippingAltitude")] \
+        = 7.0
+    raising_altitude: Annotated[float, Unit("m"), Column("RaisingAltitude")] \
+        = 15.0
+    no_buoy_radius: Annotated[float, Unit("m"), Column("NoBuoyRadius")] \
+        = -1.0
+
+@task("alars-follow-auv")
+class AlarsFollowAUVTask(Task):
+    follow_altitude: Annotated[float, Unit("m"), Column("FollowAltitude")] \
+        = 15.0
+    vulture_radius: Annotated[float, Unit("m"), Column("VultureRadius")] \
+        = 0.0
+    vulture_speed_deg: Annotated[float, Unit("°/s"), Column("VultureSpeedDeg")] \
+        = 10.0
+    timeout: Annotated[float, Unit("s"), Column("timeout")] \
+        = 30
+
+
+
+@task("alars-ping-search")
+class AlarsPingSearch(Task):
+    modem_to_ping: Annotated[int, Column("ModemToPing")] \
+        = 111
+    modem_depth: Annotated[float, Unit("m"), Column("ModemDepth")] \
+        = 0.0
+    dipping_altitude: Annotated[float, Unit("m"), Column("DippingAltitude")] \
+        = 0.0
+    max_pings: Annotated[int, Column("MaxPings")] \
+        = 5
+    waypoints: Annotated[list[GeoPoint], Column("Waypoints")] \
+        = field(default_factory = list)
+
+
+
+@task("deploy")
+class DeployPayloadTask(Task):
+    unit: Annotated[str, Column("Payload")] \
+        = ""
+
+@task("deploy-at")
+class DeployPayloadAtTask(Task):
+    #: Speed as specified in WARA-PS
+    speed: Annotated[MovementSpeedParam, Column("Speed")] \
+        = MovementSpeedParam.STANDARD
+    unit: Annotated[str, Column("Payload")] \
+        = ""
+    waypoint: Annotated[GeoPoint, Column("Waypoint")]
+
+
+# Succorfish stuff
+@task("smarc-modem-ping")
+class SmarcModemPingTask(Task):
+    # one of: add, remove, clear, ping
+    mode: Annotated[SuccorModeParam, Column("Mode")] \
+        = SuccorModeParam.PING
+    modem_id: Annotated[int, Column("ModemID")] \
+        = 222
+    depth_m: Annotated[float, Unit("m"), Column("Depth")] \
+        = 0.0
+    retry_count: Annotated[int, Column("RetryCount")] \
+        = 3
+    task_timeout_s: Annotated[float, Unit("s"), Column("TaskTimeout")] \
+        = 30
+
+@task("smarc-stop-modem-ping")
+class SmarcStopModemPingTask(Task):
+    pass
+
+
+@task("search-area")
+class SearchAreaTask(Task):
+    area_type: Annotated[AreaTypeParam, Column("Area type")] \
+        = AreaTypeParam.WATER
+    #: Speed as specified in WARA-PS
+    speed: Annotated[MovementSpeedParam, Column("Speed")] \
+        = MovementSpeedParam.STANDARD
+    # TODO: enum?
+    target_type: Annotated[str, Column("Target type")] \
+        = ""
+    target_size: Annotated[float, Column("Target size")] \
+        = 0.0
+    area: Annotated[list[GeoPoint], Column("Area")] \
+        = field(default_factory = list)

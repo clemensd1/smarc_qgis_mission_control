@@ -1,0 +1,27 @@
+<RCC>
+    <qresource prefix="/">
+        <file>custom_icons/collapse-all-arrow-icon.svg</file>
+        <file>custom_icons/eraser-icon.svg</file>
+        <file>custom_icons/expand-all-arrow-icon.svg</file>
+        <file>custom_icons/file-upload-export-color-icon.svg</file>
+        <file>custom_icons/heartbeat.gif</file>
+        <file>custom_icons/music-player-forward-round-black-outline-icon.svg</file>
+        <file>custom_icons/music-player-forward-square-black-outline-icon.svg</file>
+        <file>custom_icons/music-player-pause-square-black-outline-icon.svg</file>
+        <file>custom_icons/music-player-play-square-black-outline-icon.svg</file>
+        <file>custom_icons/music-player-stop-square-black-icon.svg</file>
+        <file>custom_icons/music-player-stop-square-icon.svg</file>
+        <file>custom_icons/selecting-all-checkmark-icon.svg</file>
+        <file>custom_icons/stop-blocked-icon.svg</file>
+        <file>custom_icons/uncheck-all-icon.svg</file>
+        <file>custom_icons/upload-round-color-red-icon.svg</file>
+        <file>custom_icons/upload-square-black-icon.svg</file>
+        <file>custom_icons/upload-square-color-blue-icon.svg</file>
+        <file>custom_icons/upload-square-color-red-icon.svg</file>
+        <file>custom_icons/vehicle_marker.svg</file>
+        <file>custom_icons/auv_marker.svg</file>
+        <file>custom_icons/uav_marker.svg</file>
+        <file>custom_icons/usv_marker.svg</file>
+        <file>custom_icons/system.svg</file>
+    </qresource>
+</RCC>

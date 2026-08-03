@@ -90,6 +90,32 @@
      </property>
      <layout class="QHBoxLayout" name="headerHLayout">
       <item>
+       <widget class="QgsColorButton" name="mColorButton">
+        <property name="toolTip">
+         <string>&lt;b&gt;Change position marker color&lt;/b&gt;</string>
+        </property>
+        <property name="popupMode">
+         <enum>QToolButton::DelayedPopup</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+        <property name="colorDialogTitle">
+         <string>Select position marker color</string>
+        </property>
+        <property name="showMenu">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QCheckBox" name="cardCheckBox">
         <property name="text">
          <string/>
@@ -134,6 +160,33 @@
          </size>
         </property>
        </spacer>
+      </item>
+      <item>
+       <widget class="QToolButton" name="lookAtButton">
+        <property name="toolTip">
+         <string>&lt;b&gt;Focus vehicle&lt;/b&gt;</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="gifLabel">
+        <property name="text">
+         <string>heartBeat</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line_2">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
       </item>
       <item>
        <widget class="QLabel" name="statusLabel">
@@ -211,6 +264,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsColorButton</class>
+   <extends>QToolButton</extends>
+   <header>qgscolorbutton.h</header>
+  </customwidget>
+ </customwidgets>
  <tabstops>
   <tabstop>collapseExpandButton</tabstop>
   <tabstop>taskList</tabstop>

@@ -7,7 +7,7 @@ from qgis.core import QgsPointXY
 
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import Task, WaypointTask, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
 
 
 __all__ = [
@@ -18,6 +18,8 @@ __all__ = [
     "DeleteWaypointUndoCommand",
     "SetWaypointPositionUndoCommand",
     "SetWaypointFieldUndoCommand",
+    "SetTaskFieldUndoCommand",
+    "SetTaskDescriptionUndoCommand",
     "SetMissionFieldUndoCommand",
 ]
 
@@ -64,44 +66,48 @@ class DeleteTaskUndoCommand(MissionUndoCommand):
         self._doc._addTaskAt(self._task, self._index)
 
 class AddWaypointUndoCommand(MissionUndoCommand):
-    _task: MultiWaypointTask
+    _task: Task
     _waypoint: Waypoint
 
-    def __init__(self, doc: 'MissionDocument', task: MultiWaypointTask,
+    def __init__(self, doc: 'MissionDocument', task: Task, fieldName: str,
                  waypoint: Waypoint) -> None:
         super().__init__(doc)
 
         self._task = task
+        self._fieldName = fieldName
         self._waypoint = waypoint
-        self._index = len(self._task.waypoints)
+        self._index = len(getattr(self._task, self._fieldName))
 
     def redo(self) -> None:
         print(self.__class__.__name__, 'redo')
-        self._doc._addTaskWaypointAt(self._task, self._waypoint, self._index)
+        self._doc._addTaskWaypointAt(self._task, self._fieldName, self._waypoint,
+                                     self._index)
 
     def undo(self) -> None:
         print(self.__class__.__name__, 'undo')
-        self._doc._deleteTaskWaypointAt(self._task, self._index)
+        self._doc._deleteTaskWaypointAt(self._task, self._fieldName, self._index)
 
 class DeleteWaypointUndoCommand(MissionUndoCommand):
-    _task: MultiWaypointTask
+    _task: Task
     _waypoint: Waypoint
 
-    def __init__(self, doc: 'MissionDocument', task: MultiWaypointTask,
+    def __init__(self, doc: 'MissionDocument', task: Task, fieldName: str,
                  waypoint: Waypoint) -> None:
         super().__init__(doc)
 
         self._task = task
+        self._fieldName = fieldName
         self._waypoint = waypoint
-        self._index = self._task.waypoints.index(self._waypoint)
+        self._index = getattr(self._task, self._fieldName).index(self._waypoint)
 
     def redo(self) -> None:
         print(self.__class__.__name__, 'redo')
-        self._doc._deleteTaskWaypointAt(self._task, self._index)
+        self._doc._deleteTaskWaypointAt(self._task, self._fieldName, self._index)
 
     def undo(self) -> None:
         print(self.__class__.__name__, 'undo')
-        self._doc._addTaskWaypointAt(self._task, self._waypoint, self._index)
+        self._doc._addTaskWaypointAt(self._task, self._fieldName, self._waypoint,
+                                     self._index)
 
 class SetWaypointPositionUndoCommand(MissionUndoCommand):
     _waypoint: Waypoint
@@ -145,6 +151,49 @@ class SetWaypointFieldUndoCommand(MissionUndoCommand):
     def undo(self):
         print(self.__class__.__name__, 'undo')
         self._doc._setWaypointField(self._waypoint, self._fieldId, self._oldValue)
+
+class SetTaskFieldUndoCommand(MissionUndoCommand):
+    _task: Task
+    _fieldId: int
+    _value: Any
+    _oldValue: Any
+
+    def __init__(self, doc: 'MissionDocument', task: Task, fieldId: int, value: Any,
+                 oldValue: Any):
+        super().__init__(doc)
+
+        self._task = task
+        self._fieldId = fieldId
+        self._value = value
+        self._oldValue = oldValue
+
+    def redo(self):
+        print(self.__class__.__name__, 'redo')
+        self._doc._setTaskField(self._task, self._fieldId, self._value)
+
+    def undo(self):
+        print(self.__class__.__name__, 'undo')
+        self._doc._setTaskField(self._task, self._fieldId, self._oldValue)
+
+class SetTaskDescriptionUndoCommand(MissionUndoCommand):
+    _task: Task
+    _value: str
+    _oldValue: str
+
+    def __init__(self, doc: 'MissionDocument', task: Task, value: str, oldValue: str):
+        super().__init__(doc)
+
+        self._task = task
+        self._value = value
+        self._oldValue = oldValue
+
+    def redo(self):
+        print(self.__class__.__name__, 'redo')
+        self._doc._setTaskDescription(self._task, self._value)
+
+    def undo(self):
+        print(self.__class__.__name__, 'undo')
+        self._doc._setTaskDescription(self._task, self._oldValue)
 
 class SetMissionFieldUndoCommand(MissionUndoCommand):
     _value: Any

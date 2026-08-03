@@ -60,7 +60,7 @@ class MqttService(QObject):
     _connected: bool
 
     mqttTopicPattern = re.compile(
-        r'([^/]+)/unit/(air|surface|subsurface)/(real|simulation)/([^/]+)(/.+)$'
+        r'([^/]+)/unit/(air|surface|subsurface|command)/(real|simulation|command)/([^/]+)(/.+)$'
     )
 
     def __init__(self, parent: QObject | None):
@@ -130,7 +130,7 @@ class MqttService(QObject):
         if reason_code == 0:
             print("MQTT connected successfully")
             print("subscribing to context:", self._context)
-            client.subscribe(self._context)
+            client.subscribe(f"{self._context}/#")
 
             self.connectionStateChanged.emit(MqttConnectionState.CONNECTED)
         else:
@@ -263,6 +263,77 @@ class MqttService(QObject):
         data = {
             'receiver': receiver,
             'signal': '$abort',
+            'unit': f'/{receiver}',
+            'command': 'signal-unit',
+            'com-uuid': str(uuid4()),
+            'sender': 'QGIS-MissionControl',
+        }
+        self._client.publish(topic, json.dumps(data))
+
+    @pyqtSlot(set)
+    def onResetEmergencySignal(self, vehicleTopics: set[str]):
+        if self._client is None:
+            # TODO
+            return
+        for vehicleTopic in vehicleTopics:
+            self.publishResetEmergencySignal(vehicleTopic)
+
+    def publishResetEmergencySignal(self, vehicleTopic: str):
+        if self._client is None:
+            # TODO
+            return
+        topic = f'{vehicleTopic}/tst/command'
+        receiver = vehicleTopic.split('/')[-1]
+        data = {
+            'receiver': receiver,
+            'signal': '$cancel_abort',
+            'unit': f'/{receiver}',
+            'command': 'signal-unit',
+            'com-uuid': str(uuid4()),
+            'sender': 'QGIS-MissionControl',
+        }
+        self._client.publish(topic, json.dumps(data))
+
+    @pyqtSlot(set)
+    def onSkipTaskSignal(self, targets: dict):
+        if self._client is None:
+            # TODO
+            return
+        for vehicleTopic, taskUuid in targets.items():
+            self.publishSkipTaskSignal(vehicleTopic, taskUuid)
+
+    def publishSkipTaskSignal(self, vehicleTopic: str, taskUuid: UUID):
+        if self._client is None:
+            # TODO
+            return
+        topic = f'{vehicleTopic}/exec/command'
+        receiver = vehicleTopic.split('/')[-1]
+        data = {
+            'signal': '$enough',
+            'task-uuid': str(taskUuid),
+            'command': 'signal-task',
+            'com-uuid': str(uuid4()),
+            'sender': 'QGIS-MissionControl',
+        }
+        self._client.publish(topic, json.dumps(data))
+
+    @pyqtSlot(set)
+    def onAbortMissionSignal(self, vehicleTopics: set[str]):
+        if self._client is None:
+            # TODO
+            return
+        for vehicleTopic in vehicleTopics:
+            self.publishAbortMissionSignal(vehicleTopic)
+
+    def publishAbortMissionSignal(self, vehicleTopic: str):
+        if self._client is None:
+            # TODO
+            return
+        topic = f'{vehicleTopic}/tst/command'
+        receiver = vehicleTopic.split('/')[-1]
+        data = {
+            'receiver': receiver,
+            'signal': '$enough',
             'unit': f'/{receiver}',
             'command': 'signal-unit',
             'com-uuid': str(uuid4()),

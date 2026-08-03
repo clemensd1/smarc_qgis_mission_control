@@ -6,7 +6,7 @@ from .ItemBasedModel import ItemBasedModel
 
 __all__ = ["SchemaBasedModel"]
 
-class SchemaBasedModel(ItemBasedModel):
+class SchemaBasedModel(ItemBasedModel): # TODO: integrate with undo/redo stack
     _schema: Schema
     _longHeaders: bool
 
@@ -40,17 +40,3 @@ class SchemaBasedModel(ItemBasedModel):
         spec = self._schema.fields[index.column()]
         # TODO: always str?
         return str(spec.value(item))
-
-    def setData(self, index: QModelIndex, value: QVariant,
-                role: int = Qt.EditRole) -> bool:
-        if role != Qt.EditRole:
-            return False
-
-        item = self._items[index.row()]
-        spec = self._schema.fields[index.column()]
-
-        spec.setValue(item, value)
-        # TODO: or [role]?
-        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
-
-        return True

@@ -3,12 +3,13 @@ from uuid import UUID, uuid4
 import json
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject
-from qgis.core import QgsPointXY
+from qgis.core import QgsProject, QgsPointXY
+from qgis.utils import iface
 
 from .MissionMapManager import MissionMapManager
 from .MissionDocument import MissionDocument
 from ..domain.missionplan import MissionPlan
-from ..domain.tasks import *
+from ..domain.tasks import PendingWaypointTask
 
 
 __all__ = ["MissionContext"]
@@ -20,9 +21,12 @@ class MissionContext(QObject):
 
     editModeChanged = pyqtSignal(bool)
     editingStarted = pyqtSignal()
+    editingAboutToFinish = pyqtSignal()
     editingFinished = pyqtSignal()
 
-    taskListModified = pyqtSignal()
+    beforeTaskAdded = pyqtSignal(UUID, int)
+    taskAdded = pyqtSignal(UUID, int)
+    taskDeleted = pyqtSignal(UUID, int)
 
     _missionDocuments: dict[UUID, MissionDocument]
     _activeDocument: UUID | None
@@ -40,13 +44,19 @@ class MissionContext(QObject):
         doc.editModeChanged.disconnect(self.editModeChanged)
         doc.editingStarted.disconnect(self.editingStarted)
         doc.editingFinished.disconnect(self.editingFinished)
-        doc.taskListModified.disconnect(self.taskListModified)
+
+        doc.beforeTaskAdded.disconnect(self.beforeTaskAdded)
+        doc.taskAdded.disconnect(self.taskAdded)
+        doc.taskDeleted.disconnect(self.taskDeleted)
 
     def _bindDocument(self, doc: MissionDocument):
         doc.editModeChanged.connect(self.editModeChanged)
         doc.editingStarted.connect(self.editingStarted)
         doc.editingFinished.connect(self.editingFinished)
-        doc.taskListModified.connect(self.taskListModified)
+
+        doc.beforeTaskAdded.connect(self.beforeTaskAdded)
+        doc.taskAdded.connect(self.taskAdded)
+        doc.taskDeleted.connect(self.taskDeleted)
 
     def activeDocument(self) -> MissionDocument | None:
         if self._activeDocument is None:
@@ -97,19 +107,32 @@ class MissionContext(QObject):
         assert(doc)
         self._bindDocument(doc)
 
+        # Activate the corresponding waypoint layer
+        iface.setActiveLayer(doc.layerBridge.waypointLayer)
+
         self.activeMissionChanged.emit(doc)
 
         # Ensure good state for widgets
         self.editingFinished.emit()
         self.editModeChanged.emit(False)
 
-    @pyqtSlot(SingleWaypointTask.Pending, QgsPointXY)
+    @pyqtSlot(PendingWaypointTask, QgsPointXY)
     # TODO: should this be here?
-    def onInitialWaypointPicked(self, pendingTask: SingleWaypointTask.Pending,
+    def onInitialWaypointPicked(self, pendingTask: PendingWaypointTask,
                                 point: QgsPointXY):
         doc = self.activeDocument()
         if doc is None:
             # TODO: invalid mapping
             return
 
-        doc.addSingleWaypointTask(pendingTask, point)
+        doc.addPendingWaypointTask(pendingTask, point)
+
+    def prepareToFinishEditing(self) -> None:
+        self.editingAboutToFinish.emit()
+
+    def cleanup(self) -> None:
+        for doc in self._missionDocuments.values():
+            doc.layerBridge.cleanup()
+
+        self._missionDocuments.clear()
+        self._activeDocument = None

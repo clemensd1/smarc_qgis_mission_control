@@ -1,5 +1,6 @@
 from qgis.PyQt.QtCore import Qt, pyqtSlot, pyqtSignal, QTimer
 from qgis.PyQt.QtWidgets import QWidget, QFrame
+from qgis.core import QgsApplication
 
 from ...context.FleetState import FleetState
 from ..generated.FleetControlWidgetUi import Ui_FleetControlWidget
@@ -15,15 +16,18 @@ ABORT_MISSION_BUTTON_CLICKS_REQUIRED = 3
 
 class FleetControlWidget(QFrame):
     uploadMissionPlanRequested = pyqtSignal(set)
-    skipTaskRequested = pyqtSignal(set)
-    pauseContinueRequested = pyqtSignal(set)
+    skipTaskRequested = pyqtSignal(dict) # dict[str, UUID]: vehicleTopic → first task UUID
+    pauseRequested = pyqtSignal(set)
+    continueRequested = pyqtSignal(set)
     abortMissionRequested = pyqtSignal(set)
     emergencyRequested = pyqtSignal(set)
+    resetEmergencyRequested = pyqtSignal(set)
 
-    def __init__(self, fleetState: FleetState, parent: QWidget | None = None):
+    def __init__(self, fleetState: FleetState, mapManager, parent: QWidget | None = None):
         super().__init__(parent)
 
         self._fleetState = fleetState
+        self._mapManager = mapManager
 
         self._selected: set[str] = set()
         self._collapsed: set[str] = set()
@@ -49,9 +53,6 @@ class FleetControlWidget(QFrame):
         self._abortMissionButtonTimer.setInterval(ABORT_MISSION_BUTTON_TIMEOUT)
         self._abortMissionButtonTimer.timeout.connect(self._resetAbortMissionClickCount)
 
-        # for i in range(5):
-        #     self.addVehicle(f"vehicle_{i}", [])
-
     def setupUi2(self):
         # Align items in the scroll area to the top
         self.ui.vehicleListVLayout.setAlignment(Qt.AlignTop)
@@ -69,9 +70,14 @@ class FleetControlWidget(QFrame):
         # Vehicle controls
         self.ui.uploadMissionPlanButton.clicked.connect(self.onUploadMissionPlanClicked)
         self.ui.skipTaskButton.clicked.connect(self.onSkipTaskClicked)
-        self.ui.pauseContinueButton.clicked.connect(self.onPauseContinueClicked)
+        self.ui.pauseButton.clicked.connect(self.onPauseClicked)
+        self.ui.continueButton.clicked.connect(self.onContinueClicked)
         self.ui.abortMissionButton.clicked.connect(self.onAbortMissionButtonClicked)
         self.ui.emergencyButton.clicked.connect(self.onEmergencyButtonClicked)
+        self.ui.resetEmergencyButton.clicked.connect(self.onResetEmergencyButtonClicked)
+
+        # Heartbeat
+        self._fleetState.vehicleHeartbeat.connect(self.onVehicleHeartbeat)
 
         # By default, keep Vehicle Control disabled
         self.ui.vehicleControls.setEnabled(False)
@@ -95,6 +101,9 @@ class FleetControlWidget(QFrame):
             vehicle.setCollapsed(False)
 
     def onVehicleToggled(self, vehicle: str, value: bool):
+        print("FleetControlWidget.onVehicleToggled() called")
+        print(value)
+
         if value:
             self._selected.add(vehicle)
         else:
@@ -148,11 +157,21 @@ class FleetControlWidget(QFrame):
 
     @pyqtSlot()
     def onSkipTaskClicked(self):
-        self.skipTaskRequested.emit(self._selected)
+        targets: dict[str, UUID] = {}
+        for vehicleTopic in self._selected:
+            state = self._fleetState.vehicleState(vehicleTopic)
+            if state is not None and state.executingTasks: # send skipTask signal only if task(s) running
+                targets[vehicleTopic] = state.executingTasks[0].uuid
+        if targets:
+            self.skipTaskRequested.emit(targets)
 
     @pyqtSlot()
-    def onPauseContinueClicked(self):
-        self.pauseContinueRequested.emit(self._selected)
+    def onPauseClicked(self):
+        self.pauseRequested.emit(self._selected)
+
+    @pyqtSlot()
+    def onContinueClicked(self):
+        self.continueRequested.emit(self._selected)
 
     @pyqtSlot()
     def onEmergencyButtonClicked(self):
@@ -176,6 +195,10 @@ class FleetControlWidget(QFrame):
             self.ui.abortMissionButton.setText(f"Abort Mission ({x})")
             self._abortMissionButtonTimer.start()
 
+    @pyqtSlot()
+    def onResetEmergencyButtonClicked(self):
+        self.resetEmergencyRequested.emit(self._selected)
+
     def _resetEmergencyClickCount(self):
         self._emergencyButtonTimer.stop()
         self._emergencyClickCounter = 0
@@ -187,12 +210,17 @@ class FleetControlWidget(QFrame):
         self.ui.abortMissionButton.setText("Abort Mission")
 
     def addVehicle(self, vehicle: str, tasks = []):
+        print("FleetControlWidget.addVehicle() called")
+
         card = VehicleCardWidget(vehicle, tasks, self.ui.vehicleList)
         card.setProperty("odd", bool(len(self._vehicles) % 2))
         card.toggled.connect(lambda v: self.onVehicleToggled(vehicle, v))
         card.collapsedChanged.connect(
             lambda v: self.onVehicleCollapsedChanged(vehicle, v)
         )
+
+        # lookAt connection
+        card.lookAtRequested.connect(self._mapManager.onLookAtRequested)
 
         self.ui.vehicleListVLayout.addWidget(card)
         self._vehicles[vehicle] = card
@@ -208,3 +236,8 @@ class FleetControlWidget(QFrame):
     @pyqtSlot(str)
     def onVehicleExpired(self, vehicleTopic: str):
         ...
+
+    @pyqtSlot(str)
+    def onVehicleHeartbeat(self, vehicleTopic: str):
+        if vehicleTopic in self._vehicles:
+            self._vehicles[vehicleTopic].onHeartbeat()

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -130 80 240" width="80" height="240">
+  <!-- Torpedo body -->
+  <path d="M0,-90 C12,-80 18,-50 18,20 C18,55 10,75 0,85 C-10,75 -18,55 -18,20 C-18,-50 -12,-80 0,-90 Z"
+        fill="param(fill)" fill-opacity="param(fill-opacity)"
+        stroke="param(outline)" stroke-width="param(outline-width)"/>
+  <!-- Dorsal centre line -->
+  <line x1="0" y1="-60" x2="0" y2="50" stroke="param(outline)" stroke-width="2" stroke-linecap="round"/>
+  <!-- Tail stabilisers -->
+  <ellipse cx="0" cy="62" rx="32" ry="7"
+           fill="param(outline)" fill-opacity="0.85"/>
+  <!-- Sensor dome -->
+  <circle cx="0" cy="-80" r="7" fill="white" opacity="0.85"/>
+  <!-- Band markings -->
+  <line x1="-17" y1="-20" x2="17" y2="-20" stroke="param(outline)" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <line x1="-18" y1="10" x2="18" y2="10" stroke="param(outline)" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <!-- Heading arrow -->
+  <line x1="0" y1="-90" x2="0" y2="-118" stroke="param(fill)" stroke-width="3" stroke-linecap="round"/>
+  <polygon points="0,-126 -6,-110 6,-110" fill="param(fill)"/>
+</svg>

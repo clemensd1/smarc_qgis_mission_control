@@ -1,13 +1,14 @@
 from uuid import UUID
 
 from qgis.PyQt.QtCore import Qt, pyqtSlot, QItemSelection
-from qgis.PyQt.QtWidgets import QWidget, QHeaderView, QAbstractItemDelegate, QDialog, QDataWidgetMapper
+from qgis.PyQt.QtWidgets import (QWidget, QHeaderView, QAbstractItemDelegate, QDialog,
+                                 QDataWidgetMapper, QMessageBox)
 from qgis.core import QgsApplication
 
 from ...mission.MissionContext import MissionContext
 from ...mission.MissionDocument import MissionDocument
 from ...domain.missionplan import MissionPlan
-from ...domain.tasks import TaskRegistry, TaskType, SingleWaypointTask
+from ...domain.tasks import TaskRegistry, UnsupportedTaskCreationError
 from ...model.TaskListModel import TaskListModel
 from ...model.MissionParamsModel import MissionParamsModel
 from ..generated.MissionPlanWidgetUi import Ui_MissionPlanWidget
@@ -16,7 +17,7 @@ from .AddTaskDialog import AddTaskDialog
 
 
 class MissionPlanWidget(QWidget):
-    taskEditors: dict[TaskType, TaskEditorWidget]
+    taskEditors: dict[str, TaskEditorWidget]
 
     _missionContext: MissionContext
 
@@ -44,15 +45,12 @@ class MissionPlanWidget(QWidget):
 
         # Respect edit mode
         self._missionContext.editModeChanged.connect(self.onEditModeChanged)
+        # Make sure any pending changes are submitted
+        self._missionContext.editingAboutToFinish.connect(self.onEditingAboutToFinish)
 
         # Signals for refreshing the task list
-        # TODO
-        def resetTaskList():
-            self.taskListModel.beginResetModel()
-            self.taskListModel.endResetModel()
-            self.onTaskSelectionChanged(None, None)
-
-        self._missionContext.taskListModified.connect(resetTaskList)
+        self._missionContext.taskAdded.connect(self.onTaskAdded)
+        self._missionContext.taskDeleted.connect(self.onTaskDeleted)
 
         # Setup icons for the task buttons
         self.ui.buttonAddTask.setIcon(QgsApplication.getThemeIcon("symbologyAdd.svg"))
@@ -67,8 +65,8 @@ class MissionPlanWidget(QWidget):
         )
 
         # Setup event handling for task buttons
-        self.ui.buttonAddTask.clicked.connect(self.onAddTask)
-        self.ui.buttonRemoveTask.clicked.connect(self.onRemoveTask)
+        self.ui.buttonAddTask.clicked.connect(self.onAddTaskClicked)
+        self.ui.buttonRemoveTask.clicked.connect(self.onRemoveTaskClicked)
 
         # Setup the task table
         self.ui.taskList.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -80,36 +78,45 @@ class MissionPlanWidget(QWidget):
         )
 
         # Create and setup task editor widgets
-        for type in TaskType:
+        for typeId, taskCls in TaskRegistry.registry.items():
             editor = TaskEditorWidget(
-                TaskRegistry.lookup(type),
+                taskCls,
                 self._missionContext,
                 self.ui.taskEditorStack
             )
-            self.taskEditors[type] = editor
+            self.taskEditors[typeId] = editor
             self.ui.taskEditorStack.addWidget(editor)
 
     @pyqtSlot(MissionDocument)
     def onActiveMissionChanged(self, doc: MissionDocument) -> None:
-        # TODO: accept doc like other models
-        self.taskListModel.setMissionPlan(doc.plan)
+        self.taskListModel.bind(doc)
         self._model.bind(doc)
         self._mapper.toFirst()
         # Reset task button states
         self.onTaskSelectionChanged(None, None)
 
+    @pyqtSlot()
+    def onEditingAboutToFinish(self) -> None:
+        # Parameter changes
+        self._mapper.submit()
+
+        # Task list (description field) changes
+        editor = self.ui.taskList.focusWidget()
+        if editor is None or editor is self.ui.taskList:
+            # No open editor
+            return
+
+        self.ui.taskList.commitData(editor)
+        self.ui.taskList.closeEditor(editor, QAbstractItemDelegate.NoHint)
+
     @pyqtSlot(bool)
     def onEditModeChanged(self, editMode: bool) -> None:
-        self.ui.missionPlanParameters.setEnabled(editMode)
+        self.ui.missionPlanDescription.setEnabled(editMode)
+        self.ui.missionPlanTimeout.setEnabled(editMode)
         self.ui.taskListSidebar.setEnabled(editMode)
 
         self.taskListModel.setEditable(editMode)
         self._model.setEditable(editMode)
-        # Close current cell editor, if present. This is primarily for the Description
-        # field
-        cellEditor = self.ui.taskList.focusWidget()
-        if cellEditor is not None:
-            self.ui.taskList.closeEditor(cellEditor, QAbstractItemDelegate.NoHint)
 
     @pyqtSlot(QItemSelection, QItemSelection)
     def onTaskSelectionChanged(self, selected: QItemSelection | None,
@@ -132,7 +139,7 @@ class MissionPlanWidget(QWidget):
             self.activateEditorForTask(task)
 
     @pyqtSlot()
-    def onAddTask(self):
+    def onAddTaskClicked(self):
         doc = self._missionContext.activeDocument()
         if doc is None:
             # TODO: invalid mapping
@@ -142,10 +149,18 @@ class MissionPlanWidget(QWidget):
         if dialog.exec() != QDialog.Accepted:
             return
 
-        doc.addTask(dialog.type(), dialog.description())
+        try:
+            doc.addTask(dialog.type(), dialog.description())
+        except UnsupportedTaskCreationError as error:
+            QMessageBox.warning(
+                self,
+                "Unsupported task creation",
+                (f"{error}\n\nThis task can currently only be loaded from an existing"
+                  " mission file.")
+            )
 
     @pyqtSlot()
-    def onRemoveTask(self):
+    def onRemoveTaskClicked(self):
         doc = self._missionContext.activeDocument()
         if doc is None:
             # TODO: invalid mapping
@@ -155,6 +170,32 @@ class MissionPlanWidget(QWidget):
         for row in rows:
             index = rows[0].row()
             doc.deleteTaskAt(index)
+
+    def _resetTaskList(self):
+        self.taskListModel.beginResetModel()
+        self.taskListModel.endResetModel()
+        self.onTaskSelectionChanged(None, None)
+
+    @pyqtSlot(UUID, int)
+    def onTaskAdded(self, taskUuid: UUID, row: int):
+        # TODO: be more smart about updating the task list
+        self._resetTaskList()
+
+        # Select the newly added task
+        index = self.taskListModel.index(row, 0)
+        self.ui.taskList.setCurrentIndex(index)
+        self.ui.taskList.scrollTo(index)
+
+    def onTaskDeleted(self, taskUuid: UUID, row: int):
+        # TODO: be more smart about updating the task list
+        self._resetTaskList()
+
+        # Select the next task, or the last one
+        row = min(self.taskListModel.rowCount() - 1, row)
+        if row >= 0:
+            index = self.taskListModel.index(row, 0)
+            self.ui.taskList.setCurrentIndex(index)
+            self.ui.taskList.scrollTo(index)
 
     def activateEditorForTask(self, task):
         if task is None:

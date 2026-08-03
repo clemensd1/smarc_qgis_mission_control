@@ -3,7 +3,7 @@ from enum import Enum
 
 from qgis.PyQt.QtCore import Qt, pyqtSlot, pyqtSignal
 from qgis.PyQt.QtGui import QIntValidator, QDoubleValidator
-from qgis.PyQt.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QDataWidgetMapper
+from qgis.PyQt.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QDataWidgetMapper, QCheckBox
 
 from ...domain.schema import Schema
 
@@ -38,7 +38,12 @@ class AutomaticFormWidget(QWidget):
             field = self.createEditorWidget(form, spec.type())
             self._formLayout.setWidget(col, QFormLayout.FieldRole, field)
 
-            self._mapper.addMapping(field, col)
+            if issubclass(spec.type(), Enum):
+                self._mapper.addMapping(field, col, b"currentText")
+                # field.editTextChanged.connect(self._mapper.submit) # connects on field change (not suitable for manual keyboard input)
+                field.lineEdit().editingFinished.connect(self._mapper.submit) # connects on fiel change (enter/focus out)
+            else:
+                self._mapper.addMapping(field, col)
 
         self._mapper.toFirst()
 
@@ -56,9 +61,28 @@ class AutomaticFormWidget(QWidget):
             widget = QComboBox(parent)
             for option in t:
                 widget.addItem(str(option))
+            widget.setEditable(True)
             return widget
         elif t is str:
             widget = QLineEdit(parent)
             return widget
+        elif t is bool:
+            widget = QCheckBox(parent)
+            return widget
         else:
             raise NotImplementedError
+
+    def _setFieldWidgetEditMode(self, fieldWidget: QWidget, editMode: bool):
+        # Subclasses can overwrite it to be fancier with how they en/disable widgets
+        fieldWidget.setEnabled(editMode)
+
+    def setEditMode(self, editMode: bool):
+        self._model.setEditable(editMode)
+
+        for i in range(self._formLayout.rowCount()):
+            item = self._formLayout.itemAt(i, QFormLayout.FieldRole)
+            if item is None:
+                # Just a label on this row
+                continue
+
+            self._setFieldWidgetEditMode(item.widget(), editMode)

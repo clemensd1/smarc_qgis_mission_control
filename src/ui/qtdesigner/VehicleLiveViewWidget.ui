@@ -74,13 +74,13 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>&lt;b&gt;Change Map Color&lt;/b&gt;</string>
+         <string>&lt;b&gt;Change track color&lt;/b&gt;</string>
         </property>
         <property name="autoRaise">
          <bool>true</bool>
         </property>
         <property name="colorDialogTitle">
-         <string>Select Map Color</string>
+         <string>Select vehicle track color</string>
         </property>
         <property name="allowOpacity">
          <bool>false</bool>
@@ -95,12 +95,6 @@
       </item>
       <item>
        <widget class="Line" name="line">
-        <property name="styleSheet">
-         <string notr="true">color: palette(mid)</string>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
         <property name="orientation">
          <enum>Qt::Vertical</enum>
         </property>
@@ -161,7 +155,7 @@
       <item>
        <widget class="QToolButton" name="lookAtButton">
         <property name="toolTip">
-         <string>&lt;b&gt;Focus Vehicle&lt;/b&gt;</string>
+         <string>&lt;b&gt;Focus vehicle&lt;/b&gt;</string>
         </property>
         <property name="text">
          <string/>
@@ -172,13 +166,14 @@
        </widget>
       </item>
       <item>
+       <widget class="QLabel" name="gifLabel">
+        <property name="text">
+         <string>heartBeat</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Line" name="line_2">
-        <property name="styleSheet">
-         <string notr="true">color: palette(mid)</string>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
         <property name="orientation">
          <enum>Qt::Vertical</enum>
         </property>

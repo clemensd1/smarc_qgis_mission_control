@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from qgis.PyQt.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 from qgis.PyQt.QtGui import QColor
 from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsField, \
-    QgsPointXY, QgsCategorizedSymbolRenderer, QgsApplication, QgsSymbol, \
-    QgsRendererCategory
+    QgsPointXY, QgsCategorizedSymbolRenderer, QgsSymbol, QgsUnitTypes, QgsProperty, \
+    QgsRendererCategory, QgsMarkerSymbol, QgsSymbolLayer, QgsSvgMarkerSymbolLayer
 from qgis.gui import QgsRubberBand
 from qgis.utils import iface
 
@@ -24,18 +24,31 @@ class FleetMapManager(QObject):
     vehicleExpired = pyqtSignal(str)
     vehicleUpdated = pyqtSignal(str)
 
-    _waypointLayer: QgsVectorLayer
+    _waypointLayer: QgsVectorLayer | None = None
 
     def __init__(self, fleetState: FleetState, parent: QObject | None):
         super().__init__(parent)
 
         self._vehicles: dict[str, VehicleMapObject] = {}
-        self._setupWaypointLayer()
+        # If a layer is created at this point, it will mark QgsProject as dirty. This
+        # will cause a popup to appear asking the user whether they want to save or
+        # discard their project changes -- even if no project is loaded!
+        # The solution is to wait until QGIS is fully initialized, and only _then_ add
+        # any layers.
+        # However, if QGIS is already open/initialized, the layer can be created right
+        # away. This happens when the plugin is reloaded.
+        if iface.mainWindow().isVisible():
+            # Plugin reloaded
+            self._setupWaypointLayer()
+        else:
+            # Fresh startup
+            iface.initializationCompleted.connect(self._setupWaypointLayer)
 
         self._fleetState = fleetState
         self._fleetState.vehicleDiscovered.connect(self.onVehicleDiscovered)
         self._fleetState.vehicleUpdated.connect(self.onVehicleUpdated)
 
+    @pyqtSlot()
     def _setupWaypointLayer(self):
         qgs = QgsProject.instance()
         # Remove any stale layers
@@ -63,7 +76,58 @@ class FleetMapManager(QObject):
         # Customized renderer which will colorize points for each vehicle
         self._waypointLayer.setRenderer(QgsCategorizedSymbolRenderer("vehicle-name"))
 
-        qgs.addMapLayer(self._waypointLayer)
+        # Register layer with project
+        qgs.addMapLayer(self._waypointLayer, False)
+
+        # Make the layer non-removable (by users)
+        flags = self._waypointLayer.flags()
+        flags &= ~self._waypointLayer.LayerFlag.Removable
+        self._waypointLayer.setFlags(flags)
+
+        # Insert the layer at top of layer tree
+        QgsProject.instance().layerTreeRoot().insertLayer(0, self._waypointLayer)
+
+        #TODO auto-select/highlight newly created layer
+
+    def _createVehicleSymbol(self, vehicleTopic: str, color: QColor) -> QgsMarkerSymbol:
+        # Pick icon by vehicle type encoded in the topic
+        if '/subsurface/' in vehicleTopic:
+            svg = ':/custom_icons/auv_marker.svg'
+            size = 4
+        elif '/surface/' in vehicleTopic:
+            svg = ':/custom_icons/usv_marker.svg'
+            size = 4
+        elif '/air/' in vehicleTopic:
+            svg = ':/custom_icons/uav_marker.svg' # can be improved!
+            size = 10
+        elif '/command/' in vehicleTopic:
+            svg = ':/custom_icons/vehicle_marker.svg'
+            size = 4
+        else:
+            svg = ':/custom_icons/vehicle_marker.svg'
+            size = 4
+
+        symbol = QgsMarkerSymbol()
+        symbol.deleteSymbolLayer(0)  # remove default circle
+
+        svg_layer = QgsSvgMarkerSymbolLayer(svg)
+        svg_layer.setSize(size)
+        svg_layer.setSizeUnit(QgsUnitTypes.RenderMetersInMapUnits) # alt. QgsUnitTypes.RenderMillimeters
+        svg_layer.setFillColor(color)
+        svg_layer.setStrokeColor(color.darker(150))
+        svg_layer.setStrokeWidth(0.2)
+
+        # Rotate marker by the heading field value
+        svg_layer.setDataDefinedProperty(
+            QgsSymbolLayer.PropertyAngle,
+            QgsProperty.fromField('heading')
+        )
+
+        # Keep marker size fixed regardless of map zoom
+        symbol.setScaleMethod(QgsSymbol.ScaleArea)
+        symbol.appendSymbolLayer(svg_layer)
+
+        return symbol
 
     @pyqtSlot(str)
     def onVehicleDiscovered(self, vehicleTopic: str):
@@ -73,10 +137,21 @@ class FleetMapManager(QObject):
 
             state = self._fleetState.vehicleState(vehicleTopic)
             assert(state)
-            symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType())
-            symbol.setColor(state.mapColor)
+            
+            symbol = self._createVehicleSymbol(vehicleTopic, state.mapColor)
 
-            category = QgsRendererCategory(vehicleTopic, symbol, vehicleTopic)
+            category = QgsRendererCategory(vehicleTopic, symbol, vehicleTopic, True) # default render state off/false
+            
+            # do not explode if the layer doesnt exist...
+            if self._waypointLayer is None:
+                print("Error: Waypoint layer not initialized")
+                return
+            
+            renderer = self._waypointLayer.renderer()
+            if renderer is None:
+                print("Error: Waypoint layer has no renderer")
+                return 
+            
             self._waypointLayer.renderer().addCategory(category)
 
             vehicle = VehicleMapObject(
@@ -92,6 +167,10 @@ class FleetMapManager(QObject):
             # TODO: invalid mapping
             return
 
+        if vehicleTopic not in self._vehicles: 
+            # update probably ran before discovery, ignore...
+            return
+
         vehicle = self._vehicles[vehicleTopic]
         if state.latitude == vehicle.lastLatitude and \
             state.longitude == vehicle.lastLongitude:
@@ -101,6 +180,9 @@ class FleetMapManager(QObject):
 
         assert(state.latitude)
         assert(state.longitude)
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized at vehicle update!")
+            return
 
         vehicle.lastLatitude = state.latitude
         vehicle.lastLongitude = state.longitude
@@ -124,6 +206,10 @@ class FleetMapManager(QObject):
 
     @pyqtSlot(str, bool)
     def onShowOnMapChanged(self, vehicleTopic: str, state: bool):
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized on map changed!")
+            return
+        
         catIdx = self._waypointLayer.renderer().categoryIndexForLabel(vehicleTopic)
         if catIdx < 0:
             # TODO: should this be logged?
@@ -133,13 +219,18 @@ class FleetMapManager(QObject):
 
     @pyqtSlot(str, QColor)
     def onMapColorChanged(self, vehicleTopic: str, color: QColor):
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized on map color changed!")
+            return
+        
         catIdx = self._waypointLayer.renderer().categoryIndexForLabel(vehicleTopic)
         if catIdx < 0:
             # TODO: should this be logged?
             return
 
-        symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType())
-        symbol.setColor(color)
+        # symbol = QgsSymbol.defaultSymbol(self._waypointLayer.geometryType()) # old
+        # symbol.setColor(color) # old
+        symbol = self._createVehicleSymbol(vehicleTopic, color)
 
         state = self._fleetState.vehicleState(vehicleTopic)
         if state is not None:
@@ -150,9 +241,47 @@ class FleetMapManager(QObject):
 
     @pyqtSlot(str)
     def onLookAtRequested(self, vehicleTopic: str):
+        if vehicleTopic not in self._vehicles: return
+
         vehicle = self._vehicles.get(vehicleTopic)
         if vehicle is None or vehicle.lastFid is None:
             return
 
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized in onLookAtRequested!")
+            return
+
         iface.mapCanvas().zoomToFeatureIds(self._waypointLayer, [vehicle.lastFid])
-        iface.mapCanvas().zoomScale(500) # zoom to fixed scale (e.g. 1:500)
+        iface.mapCanvas().zoomScale(1000) # zoom to fixed scale (e.g. 1:500)
+
+    def clearAllVehicleMarkers(self):
+        if self._waypointLayer is None:
+            print("Error: Waypoint layer not initialized on clear all!")
+            return
+
+        # Clear all features from the vector layer
+        self._waypointLayer.dataProvider().truncate()
+        self._waypointLayer.triggerRepaint()
+
+        # Clear all rubber band tracks and reset vehicle positions
+        for vehicle in self._vehicles.values():
+            vehicle.trackRubberBand.reset()
+            vehicle.lastLatitude = None
+            vehicle.lastLongitude = None
+            vehicle.lastFid = None
+
+    def cleanup(self) -> None:
+        if self._waypointLayer is None:
+            return
+
+        qgs = QgsProject.instance()
+
+        try:
+            layerId = self._waypointLayer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        self._waypointLayer = None

@@ -3,12 +3,14 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
-from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY
+from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY, QgsLayerTreeGroup
 
 from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
+from ..domain.taskspatial import iterTaskWaypoints
+from .MissionTracks import MissionTracks
 
 
 __all__ = ["MissionLayerBridge"]
@@ -26,10 +28,11 @@ class FeatureAddedEntry(JournalEntry):
 
 @dataclass
 class FeatureDeletedEntry(JournalEntry):
-    ...
+    waypointUuid: UUID
 
 @dataclass
 class FeatureMovedEntry(JournalEntry):
+    waypointUuid: UUID
     latitude: float
     longitude: float
 
@@ -40,6 +43,8 @@ class MissionLayerBridge(QObject):
         CUSTOM_EDIT_COMMAND = 'custom-edit-command'
         REPLAYING_QGIS_COMMAND = 'replaying-qgis-command'
 
+    SMARC_GROUP_NAME = 'SMaRCMissions'
+
     waypointMoved = pyqtSignal(UUID, QgsPointXY)
     waypointAdded = pyqtSignal(UUID, UUID, QgsPointXY)
     waypointDeleted = pyqtSignal(UUID)
@@ -49,9 +54,9 @@ class MissionLayerBridge(QObject):
     _state: State
     _journal: list[JournalEntry]
 
+    _layerGroup: QgsLayerTreeGroup
     waypointLayer: QgsVectorLayer
-    trackLayer: QgsVectorLayer
-
+    tracks: MissionTracks
 
     def __init__(self, plan: MissionPlan, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -61,20 +66,42 @@ class MissionLayerBridge(QObject):
         self._state = self.State.DEFAULT
         self._journal = []
 
+        self._setupLayerGroup(plan.uuid)
         self._initializeLayers(plan.uuid)
         self._populateLayers(plan)
 
-    def _initializeLayers(self, planUuid: UUID) -> None:
-        # Setup waypoint layer
+    def _setupLayerGroup(self, planUuid: UUID) -> None:
+        # Find or create the SMaRCMissions group at the top of the layer tree
         qgs = QgsProject.instance()
-        # Remove any stale layers
-        matching = qgs.mapLayersByName(f'SMaRCMissionWaypoints-{planUuid}')
-        qgs.removeMapLayers([l.id() for l in matching])
+        root = qgs.layerTreeRoot()
+        smarcgroup = root.findGroup(self.SMARC_GROUP_NAME)
+        if smarcgroup is None:
+            smarcgroup = root.insertGroup(0, self.SMARC_GROUP_NAME)
 
-        # Setup our layer
+        # Find or create group for this mission plan
+        name = f"{planUuid}"
+        layerGroup = root.findGroup(name)
+        if layerGroup is None:
+            layerGroup = smarcgroup.insertGroup(0, name)
+        else:
+            # Make sure it's clear of any leftover layers
+            print(layerGroup, layerGroup.findLayers())
+            qgs.removeMapLayers([node.layer() for node in layerGroup.findLayers()])
+
+        self._layerGroup = layerGroup
+
+    def _initializeLayers(self, planUuid: UUID) -> None:
+        """
+        Important: The default layer CRS for waypoint layers is set to EPSG:4326.
+
+        This default is dictated by the vehicles. No reprojection of coordinates 
+        needed as long as waypoint layer is initialized with EPSG:4326.
+        """
+
+        # Setup waypoint layer
         self.waypointLayer = QgsVectorLayer(
-            'point?crs=epsg:4326',
-            f'SMaRCMissionWaypoints-{planUuid}',
+            'point?crs=epsg:4326', # IMPORTANT: layer crs set to espg:4326
+            f'Waypoints',
             'memory'
         )
         self.waypointLayer.dataProvider().addAttributes([
@@ -84,8 +111,18 @@ class MissionLayerBridge(QObject):
         ])
         self.waypointLayer.updateFields()
 
-        qgs.addMapLayer(self.waypointLayer)
+        # Make the layer non-removable (by users)
+        flags = self.waypointLayer.flags()
+        flags &= ~self.waypointLayer.LayerFlag.Removable
+        self.waypointLayer.setFlags(flags)
 
+        # Register the layer with QGIS and add it to the group
+        QgsProject().instance().addMapLayer(self.waypointLayer, False)
+        self._layerGroup.addLayer(self.waypointLayer)
+
+        #TODO auto-select/highlight newly created layer
+
+        # Register layer callbacks
         self.waypointLayer.featureAdded.connect(self.onFeatureAdded)
         self.waypointLayer.featureDeleted.connect(self.onFeatureDeleted)
         self.waypointLayer.geometryChanged.connect(self.onGeometryChanged)
@@ -93,20 +130,19 @@ class MissionLayerBridge(QObject):
         self.waypointLayer.editCommandStarted.connect(self.onEditCommandStarted)
         self.waypointLayer.editCommandEnded.connect(self.onEditCommandEnded)
 
+        # Setup the tracks layer
+        # Use same color as the waypoint layer
+        color = self.waypointLayer.renderer().symbol().color()
+        self.tracks = MissionTracks(self.parent(), self._layerGroup, color, self)
+
     def _populateLayers(self, plan: MissionPlan) -> None:
         for task in plan.tasks:
             self._importTask(task)
 
     def _importTask(self, task: Task) -> None:
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                self._importWaypoint(task.uuid, waypoint)
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    self._importWaypoint(task.uuid, waypoint)
-            case _:
-                # Task has no waypoints, which currently means no map presence
-                ...
+        # Tasks without waypoints currently have no map presence
+        for waypoint in iterTaskWaypoints(task):
+            self._importWaypoint(task.uuid, waypoint)
 
     def _importWaypoint(self, taskUuid: UUID, waypoint: Waypoint) -> None:
         feat = self._waypointToFeature(taskUuid, waypoint)
@@ -152,7 +188,8 @@ class MissionLayerBridge(QObject):
             case self.State.QGIS_EDIT_COMMAND:
                 taskUuid = UUID(feat.attribute('task-uuid'))
                 point = feat.geometry().asPoint()
-                entry = FeatureAddedEntry(fid, taskUuid, waypointUuid, point.y(), point.x())
+                entry = FeatureAddedEntry(fid, taskUuid, waypointUuid, point.y(),
+                                          point.x())
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -169,9 +206,11 @@ class MissionLayerBridge(QObject):
             case self.State.DEFAULT:
                 ...
             case self.State.QGIS_EDIT_COMMAND:
+                waypointUuid = self.waypointUuidForFeatureId(fid)
+                assert(waypointUuid is not None)
                 feat = self.waypointLayer.getFeature(fid)
                 point = feat.geometry().asPoint()
-                entry = FeatureMovedEntry(fid, point.y(), point.x())
+                entry = FeatureMovedEntry(fid, waypointUuid, point.y(), point.x())
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -184,11 +223,14 @@ class MissionLayerBridge(QObject):
     def onFeatureDeleted(self, fid: int) -> None:
         print('onFeatureDeleted', fid)
 
+        waypointUuid = self.waypointUuidForFeatureId(fid)
+        assert(waypointUuid is not None)
+
         match self._state:
             case self.State.DEFAULT:
                 ...
             case self.State.QGIS_EDIT_COMMAND:
-                entry = FeatureDeletedEntry(fid)
+                entry = FeatureDeletedEntry(fid, waypointUuid)
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
                 ...
@@ -197,9 +239,6 @@ class MissionLayerBridge(QObject):
             case _ as unreachable:
                 assert_never(unreachable)
 
-        waypointUuid = self.waypointUuidForFeatureId(fid)
-        assert(waypointUuid)
-        # if waypointUuid is not None:
         del self._waypointUuidToFid[waypointUuid]
         del self._fidToWaypointUuid[fid]
 
@@ -228,14 +267,15 @@ class MissionLayerBridge(QObject):
                 case FeatureAddedEntry(fid, taskUuid, waypointUuid, latitude, longitude):
                     assert(waypointUuid)
                     self.parent().addWaypoint(taskUuid, latitude, longitude, waypointUuid)
-                case FeatureDeletedEntry(fid):
-                    waypointUuid = self.waypointUuidForFeatureId(fid)
-                    assert(waypointUuid is not None)
-                    self.parent().deleteWaypoint(waypointUuid)
-                case FeatureMovedEntry(fid, latitude, longitude):
-                    waypointUuid = self.waypointUuidForFeatureId(fid)
-                    assert(waypointUuid is not None)
-                    self.parent().setWaypointPosition(waypointUuid, latitude, longitude)
+                case FeatureDeletedEntry(fid, waypointUuid):
+                    # Deleting one fixed waypoint may delete its entire task, including
+                    # other features in the same QGIS edit command.
+                    if self.parent().index.waypointByUuid(waypointUuid) is not None:
+                        self.parent().deleteWaypoint(waypointUuid)
+                case FeatureMovedEntry(fid, waypointUuid, latitude, longitude):
+                    if self.parent().index.waypointByUuid(waypointUuid) is not None:
+                        self.parent().setWaypointPosition(
+                            waypointUuid, latitude, longitude)
 
         self._journal = []
         self._state = self.State.DEFAULT
@@ -267,3 +307,26 @@ class MissionLayerBridge(QObject):
         # TODO: confirm editable?
         point = QgsPointXY(longitude, latitude)
         self.waypointLayer.changeGeometry(fid, QgsGeometry.fromPointXY(point))
+
+    def cleanup(self) -> None:
+        qgs = QgsProject.instance()
+
+        try:
+            layerId = self.waypointLayer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        try:
+            layerId = self.tracks._layer.id()
+        except RuntimeError:
+            # Layer may have been removed externally, e.g. during QGIS shutdown
+            pass
+        else:
+            qgs.removeMapLayer(layerId)
+
+        root = QgsProject.instance().layerTreeRoot()
+
+        self._layerGroup.parent().removeChildNode(self._layerGroup)

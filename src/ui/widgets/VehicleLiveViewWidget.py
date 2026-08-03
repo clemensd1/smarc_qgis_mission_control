@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import *
 from qgis.gui import *
 from qgis.core import *
 from qgis.utils import iface
+from qgis.PyQt.QtGui import QMovie
 
 from ...context.FleetState import VehicleState
 from ..generated.VehicleLiveViewWidgetUi import Ui_VehicleLiveViewWidget
@@ -18,7 +19,9 @@ class VehicleLiveViewWidget(QWidget):
     mapColorChanged = pyqtSignal(str, QColor)
     lookAtRequested = pyqtSignal(str)
 
-    collapsedChanged = pyqtSignal(bool)
+    toggled = pyqtSignal(str, bool)
+    collapsedChanged = pyqtSignal(str, bool)
+    _checked: bool = True
     _collapsed: bool = False
 
     def __init__(self, vehicleTopic: str, parent: QWidget | None = None):
@@ -44,12 +47,20 @@ class VehicleLiveViewWidget(QWidget):
         # Actually render the bottom border
         self.setAttribute(Qt.WA_StyledBackground, True)
 
-        self.ui.showOnMapCheckBox.toggled.connect(self.onShowOnMapChanged)
         self.ui.mapColorButton.colorChanged.connect(self.onMapColorChanged)
 
         # Collapse/expand the body contents
         self.ui.collapseExpandButton.clicked.connect(self.toggleCollapsed)
-        self.setCollapsed(False)
+        self.setCollapsed(True)
+
+        # Change header colors when the checkbox is toggled
+        self.ui.showOnMapCheckBox.toggled.connect(self.setChecked)
+        self.setChecked(False)
+
+        self.heartbeat_gif = QMovie(":/custom_icons/heartbeat.gif")  # if using Qt resources
+        self.ui.gifLabel.setFixedSize(32, 32)
+        self.heartbeat_gif.setScaledSize(QSize(32, 32))
+        self.ui.gifLabel.setMovie(self.heartbeat_gif)
 
     def updateState(self, state: VehicleState):
         self.ui.modeLabel.setText(f'({state.mode:s})')
@@ -101,10 +112,10 @@ class VehicleLiveViewWidget(QWidget):
                 self.ui.statusLabel.setText('Running')
             else:
                 self.ui.taskValueLabel.setText('-')
-                self.ui.statusLabel.setText('Other')
+                self.ui.statusLabel.setText('Idle')
         else:
             self.ui.taskValueLabel.setText('?')
-            self.ui.statusLabel.setText('Idle')
+            self.ui.statusLabel.setText('Other')
 
     @pyqtSlot(bool)
     def onShowOnMapChanged(self, state: bool):
@@ -117,6 +128,29 @@ class VehicleLiveViewWidget(QWidget):
     @pyqtSlot()
     def onLookAtClicked(self):
         self.lookAtRequested.emit(self._vehicleTopic)
+
+    def isChecked(self):
+        return self._checked
+
+    @pyqtSlot("bool")
+    def setChecked(self, value: bool):
+        print("VehicleLiveViewWidget.setChecked() is called")
+
+        if self._checked == value:
+            return
+
+        self._checked = value
+        self.setProperty("checked", value)
+
+        # prevent infinite loops if caused by the checkbox
+        with QSignalBlocker(self.ui.showOnMapCheckBox):
+            self.ui.showOnMapCheckBox.setChecked(value)
+
+        self._applyStyles()
+
+        # emit change signal
+        self.toggled.emit(self._vehicleTopic, value)
+        self.showOnMapChanged.emit(self._vehicleTopic, value)
 
     @pyqtSlot("bool")
     def setCollapsed(self, value: bool):
@@ -134,10 +168,20 @@ class VehicleLiveViewWidget(QWidget):
         # Visibility is inverse of collapsed
         self.ui.body.setVisible(not value)
 
-        self.collapsedChanged.emit(value)
+        # emit change signal
+        self.collapsedChanged.emit(self._vehicleTopic, value)
 
     def isCollapsed(self):
         return self._collapsed
     
     def toggleCollapsed(self):
         self.setCollapsed(not self._collapsed)
+
+    def _applyStyles(self):
+        self.setStyleSheet(self.styleSheet())
+
+    @pyqtSlot()
+    def onHeartbeat(self):
+        self.heartbeat_gif.stop()
+        self.heartbeat_gif.jumpToFrame(0)
+        self.heartbeat_gif.start()

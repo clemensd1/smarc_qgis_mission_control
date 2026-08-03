@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>573</width>
-    <height>824</height>
+    <height>793</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,8 +52,15 @@
         <property name="enabled">
          <bool>true</bool>
         </property>
+        <property name="toolTip">
+         <string>Select all</string>
+        </property>
         <property name="text">
-         <string>Select All</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/custom_icons/selecting-all-checkmark-icon.svg</normaloff>:/custom_icons/selecting-all-checkmark-icon.svg</iconset>
         </property>
        </widget>
       </item>
@@ -62,8 +69,15 @@
         <property name="enabled">
          <bool>true</bool>
         </property>
-        <property name="text">
+        <property name="toolTip">
          <string>Deselect all</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/custom_icons/uncheck-all-icon.svg</normaloff>:/custom_icons/uncheck-all-icon.svg</iconset>
         </property>
        </widget>
       </item>
@@ -85,8 +99,15 @@
         <property name="enabled">
          <bool>true</bool>
         </property>
+        <property name="toolTip">
+         <string>Expand all</string>
+        </property>
         <property name="text">
-         <string>Expand All</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/custom_icons/expand-all-arrow-icon.svg</normaloff>:/custom_icons/expand-all-arrow-icon.svg</iconset>
         </property>
        </widget>
       </item>
@@ -95,8 +116,15 @@
         <property name="enabled">
          <bool>true</bool>
         </property>
+        <property name="toolTip">
+         <string>Collapse all</string>
+        </property>
         <property name="text">
-         <string>Collapse All</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/custom_icons/collapse-all-arrow-icon.svg</normaloff>:/custom_icons/collapse-all-arrow-icon.svg</iconset>
         </property>
        </widget>
       </item>
@@ -123,7 +151,7 @@
         <x>0</x>
         <y>0</y>
         <width>573</width>
-        <height>585</height>
+        <height>639</height>
        </rect>
       </property>
       <property name="layoutDirection">
@@ -166,16 +194,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="uploadMissionPlanButton">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Upload Mission Plan</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="Line" name="vehicleControlsSeparator_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -198,22 +216,67 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QPushButton" name="skipTaskButton">
+          <widget class="QPushButton" name="uploadMissionPlanButton">
            <property name="enabled">
             <bool>true</bool>
            </property>
+           <property name="toolTip">
+            <string>Upload mission plan</string>
+           </property>
            <property name="text">
-            <string>Skip Task</string>
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="resources.qrc">
+             <normaloff>:/custom_icons/file-upload-export-color-icon.svg</normaloff>:/custom_icons/file-upload-export-color-icon.svg</iconset>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pauseContinueButton">
+          <widget class="QPushButton" name="skipTaskButton">
            <property name="enabled">
             <bool>true</bool>
            </property>
+           <property name="toolTip">
+            <string>Skip current task</string>
+           </property>
            <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="resources.qrc">
+             <normaloff>:/custom_icons/music-player-forward-square-black-outline-icon.svg</normaloff>:/custom_icons/music-player-forward-square-black-outline-icon.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pauseButton">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="toolTip">
             <string>Pause</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="resources.qrc">
+             <normaloff>:/custom_icons/music-player-pause-square-black-outline-icon.svg</normaloff>:/custom_icons/music-player-pause-square-black-outline-icon.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="continueButton">
+           <property name="toolTip">
+            <string>Continue</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="resources.qrc">
+             <normaloff>:/custom_icons/music-player-play-square-black-outline-icon.svg</normaloff>:/custom_icons/music-player-play-square-black-outline-icon.svg</iconset>
            </property>
           </widget>
          </item>
@@ -222,15 +285,18 @@
            <property name="enabled">
             <bool>true</bool>
            </property>
+           <property name="toolTip">
+            <string>Abort mission</string>
+           </property>
            <property name="styleSheet">
-            <string notr="true">:enabled {
-  background-color: #880808;
-  color: white;
-}
-</string>
+            <string notr="true"/>
            </property>
            <property name="text">
-            <string>Abort Mission</string>
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="resources.qrc">
+             <normaloff>:/custom_icons/music-player-stop-square-icon.svg</normaloff>:/custom_icons/music-player-stop-square-icon.svg</iconset>
            </property>
           </widget>
          </item>
@@ -245,22 +311,62 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="emergencyButton">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">:enabled {
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QPushButton" name="emergencyButton">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>2</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="toolTip">
+           <string>Emergency</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">:enabled {
   background-color: #880808;
   color: white;
   font-weight: bold;
 }
-</string>
-        </property>
-        <property name="text">
-         <string>EMERGENCY</string>
-        </property>
-       </widget>
+            </string>
+          </property>
+          <property name="text">
+           <string>EMERGENCY</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="resetEmergencyButton">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="toolTip">
+           <string>Reset emergency</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">:enabled {
+  background-color: #d4edda;
+  color: black;
+  font-weight: bold;
+}</string>
+          </property>
+          <property name="text">
+           <string>RESET</string>
+          </property>
+          <property name="icon">
+           <iconset resource="resources.qrc">
+            <normaloff>:/custom_icons/system.svg</normaloff>:/custom_icons/system.svg</iconset>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
@@ -274,10 +380,11 @@
   <tabstop>collapseAllButton</tabstop>
   <tabstop>vehicleListScrollArea</tabstop>
   <tabstop>skipTaskButton</tabstop>
-  <tabstop>pauseContinueButton</tabstop>
+  <tabstop>pauseButton</tabstop>
   <tabstop>abortMissionButton</tabstop>
-  <tabstop>emergencyButton</tabstop>
  </tabstops>
- <resources/>
+ <resources>
+  <include location="resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

@@ -1,10 +1,12 @@
 from pathlib import Path
+import json
+import os
 
 from qgis.PyQt.QtCore import QObject, Qt, QSize, pyqtSlot
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QDialog, QSizePolicy, QWidget, QMessageBox
 from qgis.gui import QgisInterface
-# from qgis.core import QgsProject
+from qgis.core import QgsProject, QgsApplication
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
@@ -24,6 +26,16 @@ class SMaRCMissionControlPlugin(QObject):
         self.missionControlDock = None
         self.missionControlAction = None
 
+        self.user_settings = {
+                "mqtt": {
+                    "host": "localhost",
+                    "port": 1883,
+                    "username": "",
+                    "password": "",
+                    "context": "#",
+                },
+        }
+
         # set path and path to svg files
         self.plugin_dir = Path(__file__).parent
         self.smarc_icon_slim = QIcon(
@@ -32,6 +44,9 @@ class SMaRCMissionControlPlugin(QObject):
         self.smarc_icon = QIcon(
             str(self.plugin_dir / "ui" / "svg" / "smarclogo1.png")
         )
+
+        settings_dir = QgsApplication.qgisSettingsDirPath()
+        self.settings_file_path = str(f"{settings_dir}/smarc_qgis_mission_control/settings.json")
 
         self.fleetContext = FleetContext(self)
         self.missionContext = MissionContext(self)
@@ -70,7 +85,7 @@ class SMaRCMissionControlPlugin(QObject):
         
         # Spacer
         self.toolbarSpacer = QWidget(self.iface.mainWindow())
-        self.toolbarSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.toolbarSpacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.toolbar.addWidget(self.toolbarSpacer)
 
         # Mqtt button
@@ -80,11 +95,23 @@ class SMaRCMissionControlPlugin(QObject):
         self.toolbar.addAction(self.mqttAction)
         self.mqttButton = self.toolbar.widgetForAction(self.mqttAction)
         self.set_mqtt_button_style(False) # set color feedback of MQTT button to "disconnected"
+
+        self.settingsAction = QAction("Settings", self.iface.mainWindow())
+        self.settingsAction.setToolTip("Open plugin settings")
+        self.settingsAction.triggered.connect(self.onSettingsActionClicked)
+        self.toolbar.addAction(self.settingsAction)
+        self.settingsButton = self.toolbar.widgetForAction(self.settingsAction)
+
+
         
 
     def unload(self):
         """Called when the plugin is deactivated."""
         self.fleetContext.mqtt.disconnect()
+
+        # Clean up scratch layers created at runtime
+        self.missionContext.cleanup()
+        self.fleetContext.mapManager.cleanup()
 
         # TODO: can be cleaner
         # qgs = QgsProject.instance()
@@ -148,13 +175,48 @@ class SMaRCMissionControlPlugin(QObject):
         dialog.disconnectRequested.connect(self._onMqttDisconnect)
         dialog.exec()
 
+        # fill in the fields from the settings file if possible
+        self.loadSettings()
+
+        dialog.setIp(self.user_settings.get("mqtt", {}).get("host", ""))
+        dialog.setPort(self.user_settings.get("mqtt", {}).get("port", 1883))
+        dialog.setUsername(self.user_settings.get("mqtt", {}).get("username", ""))
+        dialog.setPassword(self.user_settings.get("mqtt", {}).get("password", ""))
+        dialog.setContext(self.user_settings.get("mqtt", {}).get("context", "+"))
+
+#         if dialog.exec() != QDialog.Accepted:
+#             return
+        
+        context = dialog.context()
+        if context == "#":
+            context = "+"
+            print("Warning: MQTT context set to '#', this only works if its at the end of a topic, context is not. Replacing with '+' instead.")
+
+    def loadSettings(self):
+        if not os.path.exists(self.settings_file_path):
+            os.makedirs(os.path.dirname(self.settings_file_path), exist_ok=True)
+            with open(self.settings_file_path, "w") as f:
+                json.dump(self.user_settings, f, indent=4)
+        with open(self.settings_file_path, "r") as f:
+            self.user_settings = json.load(f)
+        
+    @pyqtSlot(bool)
+    def onSettingsActionClicked(self, checked: bool):
+        try:
+            os.startfile(self.settings_file_path)
+        except Exception as e:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "Could not open settings file",
+                str(e),
+            )
+
     def _onMqttConnect(self, ip, port, user, pw, ctx):
         try:
-            # TODO: subscribing to certain context other than #
             self.fleetContext.mqtt.connect(ip, port, user, pw, ctx)
             self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
         except Exception as e:
-            self.set_mqtt_button_style(False)
+            self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "MQTT connection failed",
@@ -165,3 +227,4 @@ class SMaRCMissionControlPlugin(QObject):
     def _onMqttDisconnect(self):
         self.fleetContext.mqtt.disconnect()
         self.set_mqtt_button_style(self.fleetContext.mqtt._client.is_connected())
+        self.set_mqtt_button_style(True)

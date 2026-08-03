@@ -7,10 +7,13 @@ from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject
 from qgis.PyQt.QtWidgets import QUndoCommand
 from qgis.core import QgsPointXY
 
-from ..compat import assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import *
+from ..domain.tasks import (Task, TaskRegistry, PendingWaypointTask,
+                            UnsupportedTaskCreationError)
+from ..domain.taskspatial import (iterTaskWaypoints, locateTaskWaypoint,
+                                  waypointListFields, waypointListType,
+                                  waypointType)
 from .MissionIndex import MissionIndex
 from .MissionLayerBridge import MissionLayerBridge
 from .MissionUndoCommand import *
@@ -22,23 +25,20 @@ class MissionDocument(QObject):
     editingStarted = pyqtSignal()
     editingFinished = pyqtSignal()
 
-    # TODO: remove
-    taskListModified = pyqtSignal()
-
     # TODO: not very precise
     missionChanged = pyqtSignal()
 
     beforeTaskAdded = pyqtSignal(UUID, int)
-    taskAdded = pyqtSignal(UUID)
+    taskAdded = pyqtSignal(UUID, int)
     beforeTaskDeleted = pyqtSignal(UUID)
     taskDeleted = pyqtSignal(UUID, int)
     # TODO: not very precise
     taskChanged = pyqtSignal(UUID)
 
-    beforeWaypointAdded = pyqtSignal(UUID, UUID, int)
-    waypointAdded = pyqtSignal(UUID)
-    beforeWaypointDeleted = pyqtSignal(UUID)
-    waypointDeleted = pyqtSignal(UUID, UUID, int)
+    beforeWaypointAdded = pyqtSignal(UUID, str, UUID, int)
+    waypointAdded = pyqtSignal(UUID, str, UUID)
+    beforeWaypointDeleted = pyqtSignal(UUID, str, UUID, int)
+    waypointDeleted = pyqtSignal(UUID, str, UUID, int)
     # TODO: not very precise
     waypointChanged = pyqtSignal(UUID)
 
@@ -76,8 +76,8 @@ class MissionDocument(QObject):
         self.editingStarted.emit()
         self.editModeChanged.emit(True)
 
-    def stopEditing(self, save: bool):
-        if save:
+    def stopEditing(self, commit: bool):
+        if commit:
             self.layerBridge.waypointLayer.commitChanges()
         else:
             self.layerBridge.waypointLayer.rollBack()
@@ -105,54 +105,72 @@ class MissionDocument(QObject):
         self.missionChanged.emit()
 
     # TODO: accept index in addTask?
-    def addTask(self, taskType: TaskType, description: str,
+    def addTask(self, taskType: str, description: str,
                 taskUuid: UUID | None = None) -> None:
         taskCls = TaskRegistry.lookup(taskType)
-        if issubclass(taskCls, SingleWaypointTask):
-            req = SingleWaypointTask.Pending(
-                taskCls=taskCls,
-                description=description,
-                taskUuid=taskUuid or uuid4(),
-                waypointUuid=uuid4(),
-            )
-            # TODO: get mapManager from parent
-            self.parent().mapManager.pickInitialWaypoint(req)
-        else:
-            task = taskCls(description=description)
-            cmd = AddTaskUndoCommand(self, task)
+        requiredFields = taskCls.requiredFields()
 
-            text = f"Add task {taskType} ({description})"
-            with self.layerBridge.customEditCommand(text):
-                self._keepalive_undo.append(cmd)
-                self.layerBridge.waypointLayer.undoStack().push(cmd)
+        if not requiredFields:
+            # Task can be added directly
+            task = taskCls(description=description, uuid=taskUuid or uuid4())
+            self.addTaskInstance(task)
+            return
 
-    def addSingleWaypointTask(self, pendingTask: SingleWaypointTask.Pending,
-                              point: QgsPointXY) -> None:
-        waypoint = pendingTask.taskCls.waypointClass(
-            latitude=point.y(),
-            longitude=point.x(),
-            uuid=pendingTask.waypointUuid
+        if len(requiredFields) == 1:
+            field = requiredFields[0]
+            waypointCls = waypointType(field.baseType)
+            if waypointCls is not None:
+                # Task has a single required parameter, which is a waypoint
+                pending = PendingWaypointTask(
+                    taskCls = taskCls,
+                    fieldName = field.name,
+                    waypointCls = waypointCls,
+                    description = description,
+                    taskUuid = taskUuid or uuid4(),
+                    waypointUuid = uuid4(),
+                )
+                # TODO: get mapManager from parent
+                self.parent().mapManager.pickInitialWaypoint(pending)
+                return
+
+        # Task has multiple required parameters, or a single required parameter, which
+        # is not a waypoint
+        names = ", ".join(field.name for field in requiredFields)
+        raise UnsupportedTaskCreationError(
+            f"Creating task '{taskType}' requires unsupported fields: {names}")
+
+    def addPendingWaypointTask(self, pendingTask: PendingWaypointTask,
+                               point: QgsPointXY) -> None:
+        waypoint = pendingTask.waypointCls(
+            latitude = point.y(),
+            longitude = point.x(),
+            uuid = pendingTask.waypointUuid
         )
         task = pendingTask.taskCls(
-            description=pendingTask.description,
-            waypoint=waypoint,
-            uuid=pendingTask.taskUuid
+            description = pendingTask.description,
+            uuid = pendingTask.taskUuid,
+            **{pendingTask.fieldName: waypoint}
         )
-        print(task, task.uuid)
+        self.addTaskInstance(task)
 
-        feat = self.layerBridge._waypointToFeature(task.uuid, waypoint)
+    def addTaskInstance(self, task: Task) -> None:
         cmd = AddTaskUndoCommand(self, task)
 
         text = f"Add task {task.type} ({task.description})"
         with self.layerBridge.customEditCommand(text):
-            self.layerBridge.waypointLayer.addFeature(feat)
+            for waypoint in iterTaskWaypoints(task):
+                feat = self.layerBridge._waypointToFeature(task.uuid, waypoint)
+                self.layerBridge.waypointLayer.addFeature(feat)
             self._keepalive_undo.append(cmd)
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
     def _addTaskAt(self, task: Task, index: int):
+        self.beforeTaskAdded.emit(task.uuid, index)
+
         self.plan.tasks.insert(index, task)
         self.index.registerTask(task)
-        self.taskListModified.emit()
+
+        self.taskAdded.emit(task.uuid, index)
 
     def deleteTaskAt(self, index: int):
         try:
@@ -161,25 +179,26 @@ class MissionDocument(QObject):
             # TODO: invalid index
             return
 
-        if isinstance(task, SingleWaypointTask):
-            # Handled in deleteWaypoint
-            self.deleteWaypoint(task.waypoint.uuid)
-            return
-
         cmd = DeleteTaskUndoCommand(self, task)
 
         text = f"Delete task {task.type} ({task.description})"
         with self.layerBridge.customEditCommand(text):
-            if isinstance(task, MultiWaypointTask):
-                while len(task.waypoints):
-                    self.deleteWaypoint(task.waypoints[0].uuid)
+            for waypoint in iterTaskWaypoints(task):
+                fid = self.layerBridge.featureIdForWaypointUuid(waypoint.uuid)
+                if fid is not None:
+                    self.layerBridge.waypointLayer.deleteFeature(fid)
             self._keepalive_undo.append(cmd)
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
     def _deleteTaskAt(self, index: int):
-        task = self.plan.tasks.pop(index)
+        task = self.plan.tasks[index]
+
+        self.beforeTaskDeleted.emit(task.uuid)
+
+        self.plan.tasks.pop(index)
         self.index.forgetTask(task.uuid)
-        self.taskListModified.emit()
+
+        self.taskDeleted.emit(task.uuid, index)
 
     # TODO: move task to a specific index
     # def moveTask(self, taskUuid: UUID, index: int): ...
@@ -195,22 +214,35 @@ class MissionDocument(QObject):
     # TODO: accept index?
     # TODO: other waypoint parameters
     def addWaypoint(self, taskUuid: UUID, latitude: float, longitude: float,
-                    waypointUuid: UUID | None = None) -> None:
+                    waypointUuid: UUID | None = None,
+                    fieldName: str | None = None) -> None:
         task = self.index.taskByUuid(taskUuid)
         if task is None:
             # TODO: invalid mapping
             return
 
-        assert(isinstance(task, MultiWaypointTask))
+        fields = waypointListFields(type(task))
+        if fieldName is None:
+            if len(fields) != 1:
+                raise ValueError("fieldName is required for this task")
+            field = fields[0]
+        else:
+            try:
+                field = [field for field in fields if field.name == fieldName][0]
+            except IndexError:
+                raise ValueError(f"Task has no waypoint list named '{fieldName}'") \
+                    from None
 
-        waypoint = task.waypointClass(
+        waypointCls = waypointListType(field.baseType)
+        assert(waypointCls is not None)
+        waypoint = waypointCls(
             latitude = latitude,
             longitude = longitude,
             uuid = waypointUuid or uuid4()
         )
 
         feat = self.layerBridge._waypointToFeature(taskUuid, waypoint)
-        cmd = AddWaypointUndoCommand(self, task, waypoint)
+        cmd = AddWaypointUndoCommand(self, task, field.name, waypoint)
 
         with self.layerBridge.customEditCommand("Add waypoint"):
             self.layerBridge.waypointLayer.addFeature(feat)
@@ -220,12 +252,14 @@ class MissionDocument(QObject):
         # task.waypoints.append(waypoint)
         # self.index.registerWaypoint(taskUuid, waypoint)
 
-    def _addTaskWaypointAt(self, task: MultiWaypointTask, waypoint: Waypoint,
-                           index: int) -> None:
-        self.beforeWaypointAdded.emit(task.uuid, waypoint.uuid, index)
-        task.waypoints.insert(index, waypoint)
+    def _addTaskWaypointAt(self, task: Task, fieldName: str,
+                           waypoint: Waypoint, index: int) -> None:
+        waypoints = getattr(task, fieldName)
+        self.beforeWaypointAdded.emit(
+            task.uuid, fieldName, waypoint.uuid, index)
+        waypoints.insert(index, waypoint)
         self.index.registerWaypoint(task.uuid, waypoint)
-        self.waypointAdded.emit(waypoint.uuid)
+        self.waypointAdded.emit(task.uuid, fieldName, waypoint.uuid)
 
     def deleteWaypoint(self, waypointUuid: UUID):
         task = self.index.taskByWaypointUuid(waypointUuid)
@@ -233,38 +267,45 @@ class MissionDocument(QObject):
             # TODO: invalid mapping
             return
 
-        assert(isinstance(task, WaypointTask))
+        location = locateTaskWaypoint(task, waypointUuid)
+        if location is None:
+            # TODO: invalid mapping
+            return
+        fieldName, index, waypoint = location
 
-        waypoint = self.index.waypointByUuid(waypointUuid)
-        assert(isinstance(waypoint, task.waypointClass))
+        if index is None:
+            # TODO: A single waypoint field cannot be removed independently of its task
+            self.deleteTaskAt(self.plan.tasks.index(task))
+            return
 
         fid = self.layerBridge.featureIdForWaypointUuid(waypointUuid)
         assert(fid is not None)
 
-        cmd: MissionUndoCommand
-        match task:
-            case SingleWaypointTask():
-                # Deleting a whole task!
-                cmd = DeleteTaskUndoCommand(self, task)
-                text = "Delete task"
-            case MultiWaypointTask():
-                # Just deleting a waypoint from a list
-                cmd = DeleteWaypointUndoCommand(self, task, waypoint)
-                text = "Delete waypoint"
-            case _ as unreachable:
-                assert_never(unreachable)
+        cmd = DeleteWaypointUndoCommand(self, task, fieldName, waypoint)
 
-        with self.layerBridge.customEditCommand(text):
+        with self.layerBridge.customEditCommand("Delete waypoint"):
             self.layerBridge.waypointLayer.deleteFeature(fid)
             self._keepalive_undo.append(cmd)
             self.layerBridge.waypointLayer.undoStack().push(cmd)
 
-    def _deleteTaskWaypointAt(self, task: MultiWaypointTask, index: int) -> None:
-        waypoint = task.waypoints[index]
-        self.beforeWaypointDeleted.emit(waypoint.uuid)
-        task.waypoints.pop(index)
+    def deleteWaypoints(self, waypointUuids: list[UUID]):
+        if len(waypointUuids) == 1:
+            self.deleteWaypoint(waypointUuids[0])
+            return
+
+        with self.layerBridge.customEditCommand("Delete waypoints"):
+            for waypointUuid in waypointUuids:
+                self.deleteWaypoint(waypointUuid)
+
+    def _deleteTaskWaypointAt(self, task: Task, fieldName: str,
+                              index: int) -> None:
+        waypoints = getattr(task, fieldName)
+        waypoint = waypoints[index]
+        self.beforeWaypointDeleted.emit(
+            task.uuid, fieldName, waypoint.uuid, index)
+        waypoints.pop(index)
         self.index.forgetWaypoint(waypoint.uuid)
-        self.waypointDeleted.emit(task.uuid, waypoint.uuid, index)
+        self.waypointDeleted.emit(task.uuid, fieldName, waypoint.uuid, index)
 
     def setWaypointPosition(self, waypointUuid: UUID, latitude: float,
                             longitude: float):
@@ -303,3 +344,35 @@ class MissionDocument(QObject):
     def _setWaypointField(self, waypoint: Waypoint, fieldId: int, value: Any):
         waypoint.schema().fields[fieldId].setValue(waypoint, value)
         self.waypointChanged.emit(waypoint.uuid)
+
+    def setTaskField(self, taskUuid: UUID, fieldId: int, value: Any) -> None:
+        task = self.index.taskByUuid(taskUuid)
+        if task is None:
+            # TODO: invalid mapping
+            return
+
+        oldValue = task.schema().fields[fieldId].value(task)
+        cmd = SetTaskFieldUndoCommand(self, task, fieldId, value, oldValue)
+        with self.layerBridge.customEditCommand("Modify task"):
+            self._keepalive_undo.append(cmd)
+            self.layerBridge.waypointLayer.undoStack().push(cmd)
+
+    def _setTaskField(self, task: Task, fieldId: int, value: Any) -> None:
+        task.schema().fields[fieldId].setValue(task, value)
+        self.taskChanged.emit(task.uuid)
+
+    def setTaskDescription(self, taskUuid: UUID, value: str) -> None:
+        task = self.index.taskByUuid(taskUuid)
+        if task is None:
+            # TODO: invalid mapping
+            return
+
+        oldValue = task.description
+        cmd = SetTaskDescriptionUndoCommand(self, task, value, oldValue)
+        with self.layerBridge.customEditCommand("Modify task description"):
+            self._keepalive_undo.append(cmd)
+            self.layerBridge.waypointLayer.undoStack().push(cmd)
+
+    def _setTaskDescription(self, task: Task, value: str) -> None:
+        task.description = value
+        self.taskChanged.emit(task.uuid)

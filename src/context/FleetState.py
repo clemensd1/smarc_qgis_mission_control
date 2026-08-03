@@ -35,7 +35,8 @@ class FleetState(QObject):
     vehicleDiscovered = pyqtSignal(str)
     vehicleExpired = pyqtSignal(str)
     vehicleUpdated = pyqtSignal(str)
-
+    vehicleHeartbeat = pyqtSignal(str)
+    
     _vehicles: dict[str, VehicleState]
 
     def __init__(self, mqttService: MqttService, parent: QObject | None):
@@ -52,8 +53,8 @@ class FleetState(QObject):
 
     def _ensureVehicle(self, vehicleTopic: str):
         if vehicleTopic not in self._vehicles:
-            # new vehicle
-            print(f'new vehicle discovered: {vehicleTopic}')
+            print(f'FleetState._ensureVehicle: vehicle discovered: {vehicleTopic}')
+
             self._vehicles[vehicleTopic] = VehicleState()
             self.vehicleDiscovered.emit(vehicleTopic)
 
@@ -63,9 +64,10 @@ class FleetState(QObject):
 
         state = self._vehicles[event.vehicleTopic]
         state.mode = event.mode
-        
+      
         # TODO: propagate vehicle heartbeat in some way?
-
+        self.vehicleHeartbeat.emit(event.vehicleTopic)
+        
     @pyqtSlot(VehicleSensorEvent)
     def onVehicleSensorEvent(self, event: VehicleSensorEvent):
         self._ensureVehicle(event.vehicleTopic)

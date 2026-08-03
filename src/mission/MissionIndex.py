@@ -3,18 +3,20 @@ from uuid import UUID
 
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import Task, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
+from ..domain.taskspatial import iterTaskWaypoints
 
 
 @dataclass
 class MissionIndex:
+    plan: MissionPlan
     waypointMap: dict[UUID, Waypoint] = field(default_factory=dict)
     taskMap: dict[UUID, Task] = field(default_factory=dict)
     waypointTaskMap: dict[UUID, UUID] = field(default_factory=dict)
 
     @classmethod
     def fromMissionPlan(cls, plan: MissionPlan) -> 'MissionIndex':
-        index = cls()
+        index = cls(plan)
         for task in plan.tasks:
             index.registerTask(task)
 
@@ -26,6 +28,9 @@ class MissionIndex:
     def taskByUuid(self, taskUuid: UUID) -> Task | None:
         return self.taskMap.get(taskUuid)
 
+    def taskUuidByWaypointUuid(self, waypointUuid: UUID) -> UUID | None:
+        return self.waypointTaskMap.get(waypointUuid)
+
     def taskByWaypointUuid(self, waypointUuid: UUID) -> Task | None:
         taskUuid = self.waypointTaskMap.get(waypointUuid)
         if taskUuid is None:
@@ -33,29 +38,11 @@ class MissionIndex:
 
         return self.taskMap.get(taskUuid)
 
-    def indexForWaypointUuid(self, waypointUuid: UUID) -> int | None:
-        task = self.taskByWaypointUuid(waypointUuid)
-        if task is None:
-            return None
-
-        # TODO: not the most optimal way of doing this
-        assert(isinstance(task, MultiWaypointTask))
-        for idx, waypoint in enumerate(task.waypoints):
-            if waypointUuid == waypoint.uuid:
-                return idx
-
-        return None
-
     def registerTask(self, task: Task):
         self.taskMap[task.uuid] = task
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                self.waypointMap[waypoint.uuid] = waypoint
-                self.waypointTaskMap[waypoint.uuid] = task.uuid
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    self.waypointMap[waypoint.uuid] = waypoint
-                    self.waypointTaskMap[waypoint.uuid] = task.uuid
+        for waypoint in iterTaskWaypoints(task):
+            self.waypointMap[waypoint.uuid] = waypoint
+            self.waypointTaskMap[waypoint.uuid] = task.uuid
 
     def forgetTask(self, taskUuid: UUID):
         task = self.taskByUuid(taskUuid)
@@ -63,14 +50,9 @@ class MissionIndex:
             # TODO: invalid mapping
             return
 
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                del self.waypointMap[waypoint.uuid]
-                del self.waypointTaskMap[waypoint.uuid]
-            case MultiWaypointTask(waypoints=waypoints):
-                for waypoint in waypoints:
-                    del self.waypointMap[waypoint.uuid]
-                    del self.waypointTaskMap[waypoint.uuid]
+        for waypoint in iterTaskWaypoints(task):
+            del self.waypointMap[waypoint.uuid]
+            del self.waypointTaskMap[waypoint.uuid]
 
         del self.taskMap[taskUuid]
 
@@ -91,3 +73,59 @@ class MissionIndex:
 
         del self.waypointMap[waypointUuid]
         del self.waypointTaskMap[waypointUuid]
+
+    def previousWaypointByUuid(self, waypointUuid: UUID) -> Waypoint | None:
+        task = self.taskByWaypointUuid(waypointUuid)
+        waypoint = self.waypointByUuid(waypointUuid)
+        if not all((task, waypoint)):
+            # TODO: invalid mapping
+            return None
+
+        waypoints = list(iterTaskWaypoints(task))
+        index = waypoints.index(waypoint)
+
+        if index == 0:
+            # Previous on a previous task
+            taskIndex = self.plan.tasks.index(task)
+            taskIndex -= 1
+            while taskIndex >= 0:
+                task = self.plan.tasks[taskIndex]
+                waypoints = list(iterTaskWaypoints(task))
+                if len(waypoints):
+                    # Task has waypoints, last one is the one we are looking for
+                    return waypoints[-1]
+                taskIndex -= 1
+
+            # No tasks before this one have waypoints
+            return None
+        else:
+            # Previous waypoint on same task
+            return waypoints[index - 1]
+
+    def nextWaypointByUuid(self, waypointUuid: UUID) -> Waypoint | None:
+        task = self.taskByWaypointUuid(waypointUuid)
+        waypoint = self.waypointByUuid(waypointUuid)
+        if not all((task, waypoint)):
+            # TODO: invalid mapping
+            return None
+
+        waypoints = list(iterTaskWaypoints(task))
+        index = waypoints.index(waypoint)
+
+        if index == len(waypoints) - 1:
+            # Next on a following task
+            taskIndex = self.plan.tasks.index(task)
+            taskIndex += 1
+            while taskIndex < len(self.plan.tasks):
+                task = self.plan.tasks[taskIndex]
+                waypoints = list(iterTaskWaypoints(task))
+                if len(waypoints):
+                    # Task has waypoints, first one is the one we are looking for
+                    return waypoints[0]
+                taskIndex += 1
+
+            # No tasks before this one have waypoints
+            return None
+        else:
+            # Next waypoint on same task
+            return waypoints[index + 1]

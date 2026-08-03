@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-140 -150 280 280" width="280" height="280">
+  <!-- 1. Rotor discs — hardcoded, fully opaque -->
+  <circle cx="-70" cy="-70" r="30" fill="#7ab8e8" stroke="#2c6fad" stroke-width="3"/>
+  <circle cx=" 70" cy="-70" r="30" fill="#7ab8e8" stroke="#2c6fad" stroke-width="3"/>
+  <circle cx="-70" cy=" 70" r="30" fill="#7ab8e8" stroke="#2c6fad" stroke-width="3"/>
+  <circle cx=" 70" cy=" 70" r="30" fill="#7ab8e8" stroke="#2c6fad" stroke-width="3"/>
+  <!-- 2. Rotor blades -->
+  <line x1="-70" y1="-100" x2="-70" y2="-40" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1="-100" y1="-70" x2="-40" y2="-70" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1=" 70" y1="-100" x2=" 70" y2="-40" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1=" 40" y1="-70" x2=" 100" y2="-70" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1="-70" y1=" 40" x2="-70" y2=" 100" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1="-100" y1=" 70" x2="-40" y2=" 70" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1=" 70" y1=" 40" x2=" 70" y2=" 100" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <line x1=" 40" y1=" 70" x2=" 100" y2=" 70" stroke="#2c6fad" stroke-width="3" stroke-linecap="round"/>
+  <!-- 3. Arms -->
+  <line x1="0" y1="0" x2="-65" y2="-65" stroke="#2c6fad" stroke-width="10" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2=" 65" y2="-65" stroke="#2c6fad" stroke-width="10" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2="-65" y2=" 65" stroke="#2c6fad" stroke-width="10" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2=" 65" y2=" 65" stroke="#2c6fad" stroke-width="10" stroke-linecap="round"/>
+  <!-- 4. Rotor hubs -->
+  <circle cx="-70" cy="-70" r="8" fill="#1a4a7a"/>
+  <circle cx=" 70" cy="-70" r="8" fill="#1a4a7a"/>
+  <circle cx="-70" cy=" 70" r="8" fill="#1a4a7a"/>
+  <circle cx=" 70" cy=" 70" r="8" fill="#1a4a7a"/>
+  <!-- 5. Body — param(fill) here only -->
+  <polygon points="0,-35 24,-24 35,0 24,24 0,35 -24,24 -35,0 -24,-24"
+           fill="param(fill)" stroke="param(outline)" stroke-width="3"/>
+  <!-- 6. Nose dot -->
+  <circle cx="0" cy="-22" r="8" fill="white"/>
+  <!-- 7. Heading arrow — param(fill) here only -->
+  <line x1="0" y1="-35" x2="0" y2="-115" stroke="param(fill)" stroke-width="4" stroke-linecap="round"/>
+  <polygon points="0,-128 -9,-110 9,-110" fill="param(fill)"/>
+</svg>

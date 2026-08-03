@@ -37,7 +37,20 @@ class MissionParamsModel(SchemaBasedModel):
 
         col = index.column()
 
-        self._doc.setMissionField(col, value)
+        # retrieve the field specification for schema object
+        spec = self._schema.fields[col]
+        # retrieve original value (->type)
+        original = spec.value(self._doc.plan)
+
+        # cast the incoming object to the original type
+        # TODO: move conversion to MissionDocument.setMissionField?
+        try:
+            typed_value = spec.type()(value) # instead of type(original)(value)
+        
+        except (ValueError, TypeError):
+            return False  # reject invalid input
+
+        self._doc.setMissionField(col, typed_value)
 
         return True
 

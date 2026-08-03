@@ -8,43 +8,54 @@ from qgis.core import *
 from typing import *
 from uuid import UUID
 
-from ..compat import assert_never
 from ..mission.MissionDocument import MissionDocument
 from ..domain.waypoints import Waypoint
-from ..domain.tasks import WaypointTask, SingleWaypointTask, MultiWaypointTask
+from ..domain.tasks import Task
 from ..domain.schema import Schema
+from ..domain.taskspatial import isWaypointField, isWaypointListField
 from .SchemaBasedModel import SchemaBasedModel
 
 __all__ = ["WaypointListModel"]
 
 class WaypointListModel(SchemaBasedModel):
     _doc: MissionDocument | None
-    _task: WaypointTask | None
+    _task: Task | None
+    _fieldName: str | None
+    _isList: bool
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._doc = None
         self._task = None
+        self._fieldName = None
+        self._isList = False
 
-    def bind(self, doc: MissionDocument, taskUuid: UUID):
+    def bind(self, doc: MissionDocument, taskUuid: UUID, fieldName: str):
         task = doc.index.taskByUuid(taskUuid)
         if task is None:
             return
-        assert(isinstance(task, WaypointTask))
 
         self.unbind()
 
         self._doc = doc
         self._task = task
+        self._fieldName = fieldName
 
-        match task:
-            case SingleWaypointTask(waypoint=waypoint):
-                self.setItems([waypoint])
-            case MultiWaypointTask(waypoints=waypoints):
-                self.setItems(waypoints)
-            case _ as unreachable:
-                assert_never(unreachable)
+
+        try:
+            field = [
+                field for field in type(task).schema().fields
+                if field.name == fieldName
+            ][0]
+        except IndexError:
+            field = None
+        if field is None or not (isWaypointField(field) or isWaypointListField(field)):
+            raise ValueError(f"Task has no waypoint field named '{fieldName}'")
+
+        value = field.value(task)
+        self._isList = isWaypointListField(field)
+        self.setItems(value if self._isList else [value])
 
         self._doc.waypointChanged.connect(self.onWaypointChanged)
         self._doc.beforeWaypointAdded.connect(self.onBeforeWaypointAdded)
@@ -62,6 +73,8 @@ class WaypointListModel(SchemaBasedModel):
 
         self._doc = None
         self._task = None
+        self._fieldName = None
+        self._isList = False
         self.setItems([])
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
@@ -106,82 +119,84 @@ class WaypointListModel(SchemaBasedModel):
             self._doc.setWaypointField(wp.uuid, col, float(value))
             return True
 
+    def _rowForUuid(self, waypointUuid: UUID) -> int | None:
+        for row, waypoint in enumerate(self.items()):
+            if waypoint.uuid == waypointUuid:
+                return row
+        return None
+
     @pyqtSlot(UUID)
     def onWaypointChanged(self, waypointUuid: UUID):
         if self._doc is None or self._task is None:
             return
 
-        task = self._doc.index.taskByWaypointUuid(waypointUuid)
-        if task is None or task.uuid != self._task.uuid:
+        waypointIndex = self._rowForUuid(waypointUuid)
+        if waypointIndex is None:
             # Change to a task not managed by this model
             return
-
-        match self._task:
-            case MultiWaypointTask():
-                waypointIndex = self._doc.index.indexForWaypointUuid(waypointUuid)
-                if waypointIndex is None:
-                    # TODO: invalid mapping
-                    return
-            case SingleWaypointTask():
-                waypointIndex = 0
-
-        waypointSchema = self._task.waypointClass.schema()
 
         idxStart = self.index(waypointIndex, 0)
-        idxEnd = self.index(waypointIndex, len(waypointSchema.fields) - 1)
+        idxEnd = self.index(waypointIndex, self.columnCount() - 1)
         self.dataChanged.emit(idxStart, idxEnd, [Qt.DisplayRole, Qt.EditRole])
 
-    @pyqtSlot(UUID, UUID, int)
-    def onBeforeWaypointAdded(self, taskUuid: UUID, waypointUuid: UUID, index: int):
-        if self._doc is None or self._task is None:
+    @pyqtSlot(UUID, str, UUID, int)
+    def onBeforeWaypointAdded(self, taskUuid: UUID, fieldName: str, waypointUuid: UUID,
+                              waypointIndex: int):
+        if self._doc is None or self._task is None or not self._isList:
             return
 
-        if taskUuid != self._task.uuid:
-            # Change to a task not managed by this model
+        if taskUuid != self._task.uuid or fieldName != self._fieldName:
+            # Change to a task/field not managed by this model
             return
 
-        self.beginInsertRows(QModelIndex(), index, index)
+        self.beginInsertRows(QModelIndex(), waypointIndex, waypointIndex)
 
-    @pyqtSlot(UUID)
-    def onWaypointAdded(self, waypointUuid: UUID):
-        if self._doc is None or self._task is None:
+    @pyqtSlot(UUID, str, UUID)
+    def onWaypointAdded(self, taskUuid: UUID, fieldName: str, waypointUuid: UUID):
+        if self._doc is None or self._task is None or not self._isList:
             return
 
-        task = self._doc.index.taskByWaypointUuid(waypointUuid)
-        if task is None or task.uuid != self._task.uuid:
-            # Change to a task not managed by this model
+        if taskUuid != self._task.uuid or fieldName != self._fieldName:
+            # Change to a task/field not managed by this model
             return
 
         self.endInsertRows()
 
-    @pyqtSlot(UUID)
-    def onBeforeWaypointDeleted(self, waypointUuid: UUID):
-        if self._doc is None or self._task is None:
+    @pyqtSlot(UUID, str, UUID, int)
+    def onBeforeWaypointDeleted(self, taskUuid: UUID, fieldName: str,
+                                waypointUuid: UUID, waypointIndex: int):
+        if self._doc is None or self._task is None or not self._isList:
             return
 
-        task = self._doc.index.taskByWaypointUuid(waypointUuid)
-        if task is None or task.uuid != self._task.uuid:
-            # Change to a task not managed by this model
+        if taskUuid != self._task.uuid or fieldName != self._fieldName:
+            # Change to a task/field not managed by this model
             return
-
-        match self._task:
-            case MultiWaypointTask():
-                waypointIndex = self._doc.index.indexForWaypointUuid(waypointUuid)
-                if waypointIndex is None:
-                    # TODO: invalid mapping
-                    return
-            case SingleWaypointTask():
-                waypointIndex = 0
 
         self.beginRemoveRows(QModelIndex(), waypointIndex, waypointIndex)
 
-    @pyqtSlot(UUID, UUID, int)
-    def onWaypointDeleted(self, taskUuid: UUID, waypointUuid: UUID, index: int):
-        if self._doc is None or self._task is None:
+    @pyqtSlot(UUID, str, UUID, int)
+    def onWaypointDeleted(self, taskUuid: UUID, fieldName: str, waypointUuid: UUID,
+                          waypointIndex: int):
+        if self._doc is None or self._task is None or not self._isList:
             return
 
-        if taskUuid != self._task.uuid:
+        if taskUuid != self._task.uuid or fieldName != self._fieldName:
             # Change to a task not managed by this model
             return
 
         self.endRemoveRows()
+
+    def deleteWaypointsAtRows(self, rows: list[int]):
+        if self._doc is None or self._task is None or not self._isList:
+            return
+
+        if not self.isEditable():
+            return
+
+        # Validate row indexes
+        for row in rows:
+            if row < 0 or row >= self.rowCount():
+                return
+
+        uuids = [self.item(row).uuid for row in rows]
+        self._doc.deleteWaypoints(uuids)
