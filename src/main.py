@@ -205,8 +205,8 @@ class SMaRCMissionControlPlugin(QObject):
             )
 
     def _onMqttConnect(self):
-        if dialog.context() == "#":
-            dialog.setContext("+")
+        if self.dialog.context() == "#":
+            self.dialog.setContext("+")
             print("Warning: MQTT context set to '#', this only works if its at the end of a topic, context is not. Replacing with '+' instead.")
 
         try:
