@@ -336,17 +336,18 @@ class SmarcModemPingTask(Task):
 class SmarcStopModemPingTask(Task):
     pass
 
-
 @task("search-area")
 class SearchAreaTask(Task):
-    area_type: Annotated[AreaTypeParam, Column("Area type")] \
-        = AreaTypeParam.WATER
     #: Speed as specified in WARA-PS
     speed: Annotated[MovementSpeedParam, Column("Speed")] \
         = MovementSpeedParam.STANDARD
     # TODO: enum?
+    spacing: Annotated[float, Unit("m"), Column("Spacing")] \
+        = 0.0
+    area_type: Annotated[AreaTypeParam, Column("Area type")] \
+            = AreaTypeParam.WATER
     target_type: Annotated[str, Column("Target type")] \
-        = ""
+        = "Default"
     target_size: Annotated[float, Column("Target size")] \
         = 0.0
     area: Annotated[list[GeoPoint], Column("Area")] \
