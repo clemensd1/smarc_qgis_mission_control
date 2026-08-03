@@ -3,7 +3,7 @@ from ..domain.waypoints import Waypoint
 from ..domain.taskspatial import iterTaskWaypoints
 
 from qgis.core import *
-from qgis.PyQt.QtCore import Qt, QObject, pyqtSlot, pyqtSignal, QVariant
+from qgis.PyQt.QtCore import Qt, QObject, pyqtSlot, pyqtSignal, QVariant, QSizeF
 from qgis.PyQt.QtGui import QColor
 
 from uuid import UUID
@@ -83,9 +83,18 @@ class MissionTracks(QObject):
         symbol.appendSymbolLayer(markerLineSymbolLayer)
         self._layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
+        # Set label background
+        bg = QgsTextBackgroundSettings()
+        bg.setEnabled(True)
+        bg.setFillColor(QColor("white"))
+        bg.setOpacity(0.7)
+        current_bg_size = bg.size()
+        bg.setSize(QSizeF(current_bg_size.width() + 0.5, current_bg_size.height()))
+        
         # Distance labels
         fmt = QgsTextFormat()
         fmt.setSize(11)
+        fmt.setBackground(bg) # Apply background to format
 
         settings = QgsVectorLayerSimpleLabeling.defaultSettingsForLayer(self._layer)
         settings.fieldName = "format_number($length, 1) || ' m'"
