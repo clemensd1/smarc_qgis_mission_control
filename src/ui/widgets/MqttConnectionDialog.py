@@ -62,3 +62,4 @@ class MqttConnectionDialog(QDialog):
 
     def _onDisconnect(self):
         self.disconnectRequested.emit()
+        
