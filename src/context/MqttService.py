@@ -57,7 +57,6 @@ class MqttService(QObject):
     _client: mqtt.Client | None
     _context: str
     _vehicles: dict[str, dict]
-    _connected: bool
 
     mqttTopicPattern = re.compile(
         r'([^/]+)/unit/(air|surface|subsurface|command)/(real|simulation|command)/([^/]+)(/.+)$'
@@ -109,7 +108,7 @@ class MqttService(QObject):
             self.connectionStateChanged.emit(MqttConnectionState.DISCONNECTED)
             raise TimeoutError("MQTT connection attempt timed out")
 
-        if not self._connected:
+        if not self._client.is_connected():
             raise ConnectionError(f"MQTT connection rejected: {self._connect_rc}")
 
     def disconnect(self):
