@@ -1,6 +1,8 @@
 from pathlib import Path
 import json
+import platform
 import os
+import subprocess
 
 from qgis.PyQt.QtCore import QObject, Qt, QSize, pyqtSlot
 from qgis.PyQt.QtGui import QIcon
@@ -195,8 +197,14 @@ class SMaRCMissionControlPlugin(QObject):
         
     @pyqtSlot(bool)
     def onSettingsActionClicked(self, checked: bool):
+        system = platform.system()
         try:
-            os.startfile(self.settings_file_path)
+            if system == "Windows":
+                os.startfile(self.settings_file_path)
+            elif system == "Darwin":
+                subprocess.run(["open", self.settings_file_path], check=True)
+            else:  # Linux and other POSIX systems
+                subprocess.run(["xdg-open", self.settings_file_path], check=True)
         except Exception as e:
             QMessageBox.warning(
                 self.iface.mainWindow(),
