@@ -15,18 +15,25 @@ __all__ = ["MissionTracks"]
 class MissionTracks(QObject):
     _doc: 'MissionDocument'
     _layer: QgsVectorLayer
+    _activeRenderer: QgsFeatureRenderer
+    _inactiveRenderer: QgsFeatureRenderer
     _fields: list[QgsField] = [
-        QgsField("same-task", QVariant.Bool),
         QgsField("from-waypoint-uuid", QVariant.String),
         QgsField("to-waypoint-uuid", QVariant.String),
+        QgsField("same-task", QVariant.Bool),
     ]
 
+    LABEL_BACKGROUND_OPACITY: float = 0.7
+    COLOR_SELECTED_TASK = QColor("#D81B60")
+    COLOR_INACTIVE = QColor("#666666")
+    COLOR_ACTIVE = QColor("#7040A0")
+
     def __init__(self, doc: 'MissionDocument', layerGroup: QgsLayerTreeGroup,
-                 color: QColor, parent: QObject | None = None):
+                 parent: QObject | None = None):
         super().__init__(parent)
 
         self._doc = doc
-        self._setupLayer(layerGroup, color)
+        self._setupLayer(layerGroup)
         self.rebuildLayerFromMissionPlan(self._doc.plan)
 
         self._doc.waypointAdded.connect(self.onWaypointAdded)
@@ -36,7 +43,119 @@ class MissionTracks(QObject):
         self._doc.taskAdded.connect(self.onTaskAdded)
         self._doc.beforeTaskDeleted.connect(self.onBeforeTaskDeleted)
 
-    def _setupLayer(self, layerGroup: QgsLayerTreeGroup, color: QColor) -> None:
+    def _createActiveRenderer(self) -> QgsFeatureRenderer:
+        # Setup symbology for the layer
+        symbol = QgsSymbol.defaultSymbol(self._layer.geometryType())
+
+        # Default line symbol layer
+        lineSymbolLayer = symbol.symbolLayer(0)
+        # Same-task connections -> solid lines, otherwise dashed
+        lineSymbolLayer.setColor(self.COLOR_ACTIVE)
+        lineSymbolLayer.setDataDefinedProperty(
+            QgsSimpleLineSymbolLayer.PropertyStrokeStyle,
+            QgsProperty.fromExpression(
+                "CASE WHEN \"same-task\" THEN 'solid' ELSE 'dash' END"
+            )
+        )
+        lineSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyStrokeColor,
+            QgsProperty.fromExpression(f'''
+                CASE WHEN
+                    array_contains(@selected_task_waypoint_uuids, "from-waypoint-uuid")
+                    AND array_contains(@selected_task_waypoint_uuids, "to-waypoint-uuid")
+                THEN '{self.COLOR_SELECTED_TASK.name()}'
+                ELSE '{lineSymbolLayer.color().name()}'
+                END
+            ''')
+        )
+        lineSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyStrokeWidth,
+            QgsProperty.fromExpression(
+                '''
+                CASE WHEN
+                    array_contains(@selected_task_waypoint_uuids, "from-waypoint-uuid")
+                    AND array_contains(@selected_task_waypoint_uuids, "to-waypoint-uuid")
+                THEN 1
+                ELSE 0.45
+                END'''
+            )
+        )
+
+        # Arrow marker
+        markerLineSymbolLayer = QgsMarkerLineSymbolLayer()
+        markerLineSymbolLayer.setPlacements(Qgis.MarkerLinePlacement.SegmentCenter)
+        markerLineSymbolLayer.setRotateSymbols(True)
+
+        arrowSymbol = markerLineSymbolLayer.subSymbol()
+        arrowMarkerLayer = arrowSymbol.symbolLayer(0)
+
+        # No outline
+        arrowMarkerLayer.setStrokeStyle(Qt.NoPen)
+        arrowMarkerLayer.setColor(self.COLOR_ACTIVE)
+        # Set the shape
+        arrowMarkerLayer.setShape(Qgis.MarkerShape.ArrowHeadFilled)
+        arrowMarkerLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertySize,
+            QgsProperty.fromExpression('''
+                CASE WHEN
+                    array_contains(@selected_task_waypoint_uuids, "from-waypoint-uuid")
+                    AND array_contains(@selected_task_waypoint_uuids, "to-waypoint-uuid")
+                THEN 5
+                ELSE 3 END
+            ''')
+        )
+        arrowMarkerLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyFillColor,
+            QgsProperty.fromExpression(f'''
+                CASE WHEN
+                    array_contains(@selected_task_waypoint_uuids, "from-waypoint-uuid")
+                    AND array_contains(@selected_task_waypoint_uuids, "to-waypoint-uuid")
+                THEN '{self.COLOR_SELECTED_TASK.name()}'
+                ELSE '{arrowMarkerLayer.color().name()}'
+                END
+            ''')
+        )
+
+        symbol.appendSymbolLayer(markerLineSymbolLayer)
+
+        return QgsSingleSymbolRenderer(symbol)
+
+    def _createInactiveRenderer(self) -> QgsFeatureRenderer:
+        # Setup symbology for the layer
+        symbol = QgsSymbol.defaultSymbol(self._layer.geometryType())
+
+        # Default line symbol layer
+        lineSymbolLayer = symbol.symbolLayer(0)
+        lineSymbolLayer.setColor(self.COLOR_INACTIVE)
+        lineSymbolLayer.setWidth(0.45)
+        # Same-task connections -> solid lines, otherwise dashed
+        lineSymbolLayer.setDataDefinedProperty(
+            QgsSimpleLineSymbolLayer.PropertyStrokeStyle,
+            QgsProperty.fromExpression(
+                "CASE WHEN \"same-task\" THEN 'solid' ELSE 'dash' END"
+            )
+        )
+
+        # Arrow marker
+        markerLineSymbolLayer = QgsMarkerLineSymbolLayer()
+        markerLineSymbolLayer.setPlacements(Qgis.MarkerLinePlacement.SegmentCenter)
+        markerLineSymbolLayer.setRotateSymbols(True)
+
+        arrowSymbol = markerLineSymbolLayer.subSymbol()
+        arrowMarkerLayer = arrowSymbol.symbolLayer(0)
+
+        # No outline
+        arrowMarkerLayer.setStrokeStyle(Qt.NoPen)
+
+        arrowMarkerLayer.setColor(self.COLOR_INACTIVE)
+        arrowMarkerLayer.setShape(Qgis.MarkerShape.ArrowHeadFilled)
+        arrowMarkerLayer.setSize(3.0)
+
+        symbol.appendSymbolLayer(markerLineSymbolLayer)
+
+        return QgsSingleSymbolRenderer(symbol)
+
+    def _setupLayer(self, layerGroup: QgsLayerTreeGroup) -> None:
         self._layer = QgsVectorLayer(
             "LineString?crs=EPSG:4326",
             "Tracks",
@@ -50,44 +169,15 @@ class MissionTracks(QObject):
         flags &= ~self._layer.LayerFlag.Removable
         self._layer.setFlags(flags)
 
-        # Setup symbology for the layer
-        symbol = QgsSymbol.defaultSymbol(self._layer.geometryType())
-
-        # Default line symbol layer
-        lineSymbolLayer = symbol.symbolLayer(0)
-        lineSymbolLayer.setWidth(0.35)
-        # Same-task connections -> solid lines, otherwise dashed
-        lineSymbolLayer.setDataDefinedProperty(
-            QgsSimpleLineSymbolLayer.PropertyStrokeStyle,
-            QgsProperty.fromExpression(
-                "CASE WHEN \"same-task\" THEN 'solid' ELSE 'dash' END"
-            )
-        )
-        lineSymbolLayer.setColor(color)
-
-        # Arrow marker
-        markerLineSymbolLayer = QgsMarkerLineSymbolLayer()
-        markerLineSymbolLayer.setPlacements(Qgis.MarkerLinePlacement.SegmentCenter)
-        markerLineSymbolLayer.setRotateSymbols(True)
-
-        arrowSymbol = markerLineSymbolLayer.subSymbol()
-        arrowMarkerLayer = arrowSymbol.symbolLayer(0)
-
-        # Set the shape
-        arrowMarkerLayer.setShape(Qgis.MarkerShape.ArrowHeadFilled)
-        arrowMarkerLayer.setSize(3.0)
-        # No outline
-        arrowMarkerLayer.setStrokeStyle(Qt.NoPen)
-        arrowMarkerLayer.setColor(color)
-
-        symbol.appendSymbolLayer(markerLineSymbolLayer)
-        self._layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+        # Create renderers for both states
+        self._activeRenderer = self._createActiveRenderer()
+        self._inactiveRenderer = self._createInactiveRenderer()
 
         # Set label background
         bg = QgsTextBackgroundSettings()
         bg.setEnabled(True)
         bg.setFillColor(QColor("white"))
-        bg.setOpacity(0.7)
+        bg.setOpacity(self.LABEL_BACKGROUND_OPACITY)
         current_bg_size = bg.size()
         bg.setSize(QSizeF(current_bg_size.width() + 0.5, current_bg_size.height()))
         
@@ -103,11 +193,27 @@ class MissionTracks(QObject):
 
         labeling = QgsVectorLayerSimpleLabeling(settings)
         self._layer.setLabeling(labeling)
-        self._layer.setLabelsEnabled(True)
+
+        # Make the layer use the proper renderer and labeling
+        self.setActive(True)
 
         # Register the layer with QGIS and add it to the group
         QgsProject.instance().addMapLayer(self._layer, False)
         layerGroup.addLayer(self._layer)
+
+    def setActive(self, active: bool = True) -> None:
+        opacity = 1.0 if active else 0.4
+        # Layer itself
+        self._layer.setOpacity(opacity)
+
+        # Labeling
+        self._layer.setLabelsEnabled(active)
+
+        # Renderer
+        renderer = self._activeRenderer if active else self._inactiveRenderer
+        # Need to clone the reusable renderer, since layer takes ownership of it
+        self._layer.setRenderer(renderer.clone())
+        self._layer.triggerRepaint()
 
     def rebuildLayerFromMissionPlan(self, plan: MissionPlan) -> None:
         # Drop all existing features

@@ -36,6 +36,9 @@ class MissionControlDockWidget(QgsDockWidget):
             self._missionContext,
             self.ui.tabWidget
         )
+        self.ui.tabMissionPlan.taskSelectionChanged.connect(
+            self._missionContext.onTaskSelectionChanged
+        )
         self.ui.tabWidget.addTab(self.ui.tabMissionPlan, "")
 
         self.ui.tabFleetControl = FleetControlWidget(
