@@ -18,9 +18,9 @@ class MissionTracks(QObject):
     _activeRenderer: QgsFeatureRenderer
     _inactiveRenderer: QgsFeatureRenderer
     _fields: list[QgsField] = [
-        QgsField("same-task", QVariant.Bool),
         QgsField("from-waypoint-uuid", QVariant.String),
         QgsField("to-waypoint-uuid", QVariant.String),
+        QgsField("same-task", QVariant.Bool),
     ]
 
     LABEL_BACKGROUND_OPACITY: float = 0.7
