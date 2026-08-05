@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 
 from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
-from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, QgsPointXY, QgsLayerTreeGroup
+from qgis.PyQt.QtGui import QColor
+from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, \
+    QgsPointXY, QgsLayerTreeGroup, QgsProperty, QgsSymbol, QgsSimpleMarkerSymbolLayer, \
+    QgsSingleSymbolRenderer, QgsFeatureRenderer
 
 from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
@@ -44,6 +47,10 @@ class MissionLayerBridge(QObject):
         REPLAYING_QGIS_COMMAND = 'replaying-qgis-command'
 
     SMARC_GROUP_NAME = 'SMaRCMissions'
+    # TODO: centralized place for these
+    COLOR_SELECTED_TASK = QColor("#D81B60")
+    COLOR_INACTIVE = QColor("#666666")
+    COLOR_ACTIVE = QColor("#7040A0")
 
     waypointMoved = pyqtSignal(UUID, QgsPointXY)
     waypointAdded = pyqtSignal(UUID, UUID, QgsPointXY)
@@ -90,6 +97,53 @@ class MissionLayerBridge(QObject):
 
         self._layerGroup = layerGroup
 
+    def _createActiveRenderer(self) -> QgsFeatureRenderer:
+        # Configure symbol for layer
+        symbol = QgsSymbol.defaultSymbol(self.waypointLayer.geometryType())
+
+        markerSymbolLayer = symbol.symbolLayer(0)
+        markerSymbolLayer.setColor(self.COLOR_ACTIVE)
+        markerSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyFillColor,
+            QgsProperty.fromExpression(f'''
+                CASE WHEN
+                    array_contains(@selected_task_uuids, "task-uuid")
+                THEN '{self.COLOR_SELECTED_TASK.name()}'
+                ELSE '{markerSymbolLayer.color().name()}' END
+            ''')
+        )
+        markerSymbolLayer.setSize(2.0)
+        markerSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertySize,
+            QgsProperty.fromExpression(f'''
+                CASE WHEN
+                    array_contains(@selected_task_uuids, "task-uuid")
+                THEN 3
+                ELSE {markerSymbolLayer.size()} END
+            ''')
+        )
+
+        return QgsSingleSymbolRenderer(symbol)
+
+    def _createInactiveRenderer(self) -> QgsFeatureRenderer:
+        # Configure symbol for layer
+        symbol = QgsSymbol.defaultSymbol(self.waypointLayer.geometryType())
+
+        markerSymbolLayer = symbol.symbolLayer(0)
+        markerSymbolLayer.setColor(self.COLOR_INACTIVE)
+        markerSymbolLayer.setSize(2.0)
+
+        return QgsSingleSymbolRenderer(symbol)
+
+    def setActive(self, active: bool = True) -> None:
+        opacity = 1.0 if active else 0.4
+        self.waypointLayer.setOpacity(opacity)
+
+        renderer = self._activeRenderer if active else self._inactiveRenderer
+        # Need to clone the reusable renderer, since layer takes ownership of it
+        self.waypointLayer.setRenderer(renderer.clone())
+        self.waypointLayer.triggerRepaint()
+
     def _initializeLayers(self, planUuid: UUID) -> None:
         """
         Important: The default layer CRS for waypoint layers is set to EPSG:4326.
@@ -97,6 +151,7 @@ class MissionLayerBridge(QObject):
         This default is dictated by the vehicles. No reprojection of coordinates 
         needed as long as waypoint layer is initialized with EPSG:4326.
         """
+        # TODO: Split this into a separate class like MissionTracks
 
         # Setup waypoint layer
         self.waypointLayer = QgsVectorLayer(
@@ -105,8 +160,8 @@ class MissionLayerBridge(QObject):
             'memory'
         )
         self.waypointLayer.dataProvider().addAttributes([
-            QgsField('task-uuid', QVariant.String),
             QgsField('waypoint-uuid', QVariant.String),
+            QgsField('task-uuid', QVariant.String),
             QgsField('tolerance', QVariant.Double)
         ])
         self.waypointLayer.updateFields()
@@ -115,6 +170,9 @@ class MissionLayerBridge(QObject):
         flags = self.waypointLayer.flags()
         flags &= ~self.waypointLayer.LayerFlag.Removable
         self.waypointLayer.setFlags(flags)
+
+        self._activeRenderer = self._createActiveRenderer()
+        self._inactiveRenderer = self._createInactiveRenderer()
 
         # Register the layer with QGIS and add it to the group
         QgsProject().instance().addMapLayer(self.waypointLayer, False)
@@ -131,9 +189,7 @@ class MissionLayerBridge(QObject):
         self.waypointLayer.editCommandEnded.connect(self.onEditCommandEnded)
 
         # Setup the tracks layer
-        # Use same color as the waypoint layer
-        color = self.waypointLayer.renderer().symbol().color()
-        self.tracks = MissionTracks(self.parent(), self._layerGroup, color, self)
+        self.tracks = MissionTracks(self.parent(), self._layerGroup, self)
 
     def _populateLayers(self, plan: MissionPlan) -> None:
         for task in plan.tasks:
