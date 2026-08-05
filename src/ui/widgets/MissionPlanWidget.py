@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from qgis.PyQt.QtCore import Qt, pyqtSlot, QItemSelection
+from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelection
 from qgis.PyQt.QtWidgets import (QWidget, QHeaderView, QAbstractItemDelegate, QDialog,
                                  QDataWidgetMapper, QMessageBox)
 from qgis.core import QgsApplication
@@ -20,6 +20,8 @@ class MissionPlanWidget(QWidget):
     taskEditors: dict[str, TaskEditorWidget]
 
     _missionContext: MissionContext
+
+    taskSelectionChanged = pyqtSignal(list)
 
     def __init__(self, missionContext: MissionContext,
                  parent: QWidget | None = None) -> None:
@@ -137,6 +139,9 @@ class MissionPlanWidget(QWidget):
         else:
             task = self.taskListModel.item(rows[0].row())
             self.activateEditorForTask(task)
+
+        taskUuids = [self.taskListModel.item(row.row()).uuid for row in rows]
+        self.taskSelectionChanged.emit(taskUuids)
 
     @pyqtSlot()
     def onAddTaskClicked(self):

@@ -10,6 +10,7 @@ from .MissionMapManager import MissionMapManager
 from .MissionDocument import MissionDocument
 from ..domain.missionplan import MissionPlan
 from ..domain.tasks import PendingWaypointTask
+from ..domain.taskspatial import iterTaskWaypoints
 
 
 __all__ = ["MissionContext"]
@@ -96,6 +97,7 @@ class MissionContext(QObject):
 
     @pyqtSlot(UUID)
     def changeActiveMission(self, planUuid: UUID):
+        # Disconnect signals from the old document, connect to the new document
         doc = self.activeDocument()
         if doc is not None:
             self._unbindDocument(doc)
@@ -110,11 +112,39 @@ class MissionContext(QObject):
         # Activate the corresponding waypoint layer
         iface.setActiveLayer(doc.layerBridge.waypointLayer)
 
+        # Inform the layers of their changed activity status
+        for otherUuid, otherDoc in self._missionDocuments.items():
+            active = otherUuid == planUuid
+            otherDoc.layerBridge.setActive(active)
+            otherDoc.layerBridge.tracks.setActive(otherUuid == planUuid)
+
         self.activeMissionChanged.emit(doc)
 
         # Ensure good state for widgets
         self.editingFinished.emit()
         self.editModeChanged.emit(False)
+
+    @pyqtSlot(list)
+    def onTaskSelectionChanged(self, taskUuids: list[UUID]) -> None:
+        doc = self.activeDocument()
+        if doc is None:
+            return
+
+        tasks = [doc.index.taskByUuid(taskUuid) for taskUuid in taskUuids]
+        nestedWaypoints = [list(iterTaskWaypoints(task)) for task in tasks if task]
+        waypoints = sum(nestedWaypoints, [])
+
+        iface.mapCanvas().expressionContextScope().setVariable(
+            "selected_task_uuids",
+            [str(taskUuid) for taskUuid in taskUuids]
+        )
+        iface.mapCanvas().expressionContextScope().setVariable(
+            "selected_task_waypoint_uuids",
+            [str(waypoint.uuid) for waypoint in waypoints]
+        )
+
+        doc.layerBridge.waypointLayer.triggerRepaint()
+        doc.layerBridge.tracks._layer.triggerRepaint()
 
     @pyqtSlot(PendingWaypointTask, QgsPointXY)
     # TODO: should this be here?
