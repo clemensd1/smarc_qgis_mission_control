@@ -2,12 +2,14 @@ from uuid import UUID
 from dataclasses import dataclass
 from contextlib import contextmanager
 
-from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
+from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant, QSizeF
 from qgis.PyQt.QtGui import QColor
 from qgis.core import QgsProject, QgsField, QgsFeature, QgsVectorLayer, QgsGeometry, \
     QgsPointXY, QgsLayerTreeGroup, QgsProperty, QgsSymbol, QgsSimpleMarkerSymbolLayer, \
-    QgsSingleSymbolRenderer, QgsFeatureRenderer
+    QgsSingleSymbolRenderer, QgsFeatureRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, \
+    QgsTextFormat, QgsUnitTypes #, QgsTextBackgroundSettings
 
+from typing import Any
 from ..compat import StrEnum, assert_never
 from ..domain.missionplan import MissionPlan
 from ..domain.waypoints import Waypoint
@@ -25,6 +27,7 @@ class JournalEntry:
 @dataclass
 class FeatureAddedEntry(JournalEntry):
     taskUuid: UUID
+    description: str
     waypointUuid: UUID
     latitude: float
     longitude: float
@@ -123,6 +126,19 @@ class MissionLayerBridge(QObject):
             ''')
         )
 
+        # Stroke width driven by the "tolerance" field
+        markerSymbolLayer.setStrokeWidthUnit(QgsUnitTypes.RenderUnit.RenderMetersInMapUnits)
+        markerSymbolLayer.setStrokeWidth(0.0)  # base width
+        markerSymbolLayer.setStrokeColor(QColor("grey"))
+        markerSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyStrokeColor,
+            QgsProperty.fromExpression('set_color_part(\'grey\', \'alpha\', 64)') # set stroke opacity seperate from symbol fill opacity
+        )
+        markerSymbolLayer.setDataDefinedProperty(
+            QgsSimpleMarkerSymbolLayer.PropertyStrokeWidth,
+            QgsProperty.fromExpression('coalesce("tolerance",0) * 4') # such that stroke radius matches tolerance
+        )
+
         return QgsSingleSymbolRenderer(symbol)
 
     def _createInactiveRenderer(self) -> QgsFeatureRenderer:
@@ -138,6 +154,8 @@ class MissionLayerBridge(QObject):
     def setActive(self, active: bool = True) -> None:
         opacity = 1.0 if active else 0.4
         self.waypointLayer.setOpacity(opacity)
+
+        self.waypointLayer.setLabelsEnabled(active)
 
         renderer = self._activeRenderer if active else self._inactiveRenderer
         # Need to clone the reusable renderer, since layer takes ownership of it
@@ -162,9 +180,43 @@ class MissionLayerBridge(QObject):
         self.waypointLayer.dataProvider().addAttributes([
             QgsField('waypoint-uuid', QVariant.String),
             QgsField('task-uuid', QVariant.String),
-            QgsField('tolerance', QVariant.Double)
+            QgsField('tolerance', QVariant.Double),
+            QgsField('task-description', QVariant.String)
         ])
         self.waypointLayer.updateFields()
+
+        # Label each waypoint with its parent task's description
+        labelSettings = QgsPalLayerSettings()
+        labelSettings.fieldName = "task-description"
+        labelSettings.placement = QgsPalLayerSettings.Placement.AroundPoint
+        # labelSettings.settings.distUnits = Qgis.RenderUnit.Millimeters
+        labelSettings.dist = 1.5
+
+        textFormat = QgsTextFormat()
+        textFormat.setSize(8)
+
+        ## alt. 1: set background color and opacity for the text label
+            ## requires from qgis.core import QgsTextBackgroundSettings
+        # background = QgsTextBackgroundSettings()
+        # background.setEnabled(True)
+        # background.setType(QgsTextBackgroundSettings.ShapeType.ShapeRectangle)
+        # background.setFillColor(QColor("white"))
+        # background.setOpacity(0.75)
+        # background.setSize(QSizeF(0.5, 0))  # padding around the text, in mm by default
+        # textFormat.setBackground(background)
+
+        ## alt. 2: set a buffer around the text label
+        buffer = textFormat.buffer()
+        buffer.setEnabled(True)
+        buffer.setColor(QColor("yellow"))
+        buffer.setSize(1.5)
+        buffer.setOpacity(0.50)
+        textFormat.setBuffer(buffer)
+
+        labelSettings.setFormat(textFormat)
+
+        self.waypointLayer.setLabeling(QgsVectorLayerSimpleLabeling(labelSettings))
+        self.waypointLayer.setLabelsEnabled(True)
 
         # Make the layer non-removable (by users)
         flags = self.waypointLayer.flags()
@@ -198,22 +250,24 @@ class MissionLayerBridge(QObject):
     def _importTask(self, task: Task) -> None:
         # Tasks without waypoints currently have no map presence
         for waypoint in iterTaskWaypoints(task):
-            self._importWaypoint(task.uuid, waypoint)
+            self._importWaypoint(task.uuid, task.description, waypoint)
 
-    def _importWaypoint(self, taskUuid: UUID, waypoint: Waypoint) -> None:
-        feat = self._waypointToFeature(taskUuid, waypoint)
+    def _importWaypoint(self, taskUuid: UUID, taskDescription: str, waypoint: Waypoint) -> None:
+        feat = self._waypointToFeature(taskUuid, taskDescription, waypoint)
         self.waypointLayer.dataProvider().addFeature(feat)
 
         self._fidToWaypointUuid[feat.id()] = waypoint.uuid
         self._waypointUuidToFid[waypoint.uuid] = feat.id()
 
-    def _waypointToFeature(self, taskUuid: UUID, waypoint: Waypoint) -> QgsFeature:
+    def _waypointToFeature(self, taskUuid: UUID, taskDescription: str, waypoint: Waypoint) -> QgsFeature:
         feat = QgsFeature(self.waypointLayer.fields())
         point = QgsPointXY(waypoint.longitude, waypoint.latitude)
         geom = QgsGeometry.fromPointXY(point)
         feat.setGeometry(geom)
         feat.setAttribute('task-uuid', str(taskUuid))
+        feat.setAttribute('task-description', str(taskDescription))
         feat.setAttribute('waypoint-uuid', str(waypoint.uuid))
+        feat.setAttribute('tolerance', float(waypoint.tolerance))
 
         return feat
 
@@ -222,6 +276,31 @@ class MissionLayerBridge(QObject):
 
     def waypointUuidForFeatureId(self, featureId: int) -> UUID | None:
         return self._fidToWaypointUuid.get(featureId)
+
+    def updateTaskDescriptionLabel(self, taskUuid: UUID, description: str) -> None:
+        # TODO: maybe a bit of a hack
+        fieldIdx = self.waypointLayer.fields().indexFromName('task-description')
+        changes = {
+            feat.id(): {fieldIdx: description}
+            for feat in self.waypointLayer.getFeatures()
+            if feat.attribute('task-uuid') == str(taskUuid)
+        }
+        if changes:
+            self.waypointLayer.dataProvider().changeAttributeValues(changes)
+            self.waypointLayer.triggerRepaint()
+
+    def setWaypointAttribute(self, waypointUuid: UUID, attributeName: str, value: Any) -> None:
+        fid = self.featureIdForWaypointUuid(waypointUuid)
+        if fid is None:
+            # TODO: Invalid mapping
+            return
+
+        fieldIdx = self.waypointLayer.fields().indexFromName(attributeName)
+        if fieldIdx < 0:
+            return
+
+        # TODO: confirm editable?
+        self.waypointLayer.changeAttributeValue(fid, fieldIdx, value)
 
     @pyqtSlot(str)
     def onEditCommandStarted(self, text: str):
@@ -243,8 +322,9 @@ class MissionLayerBridge(QObject):
                 ...
             case self.State.QGIS_EDIT_COMMAND:
                 taskUuid = UUID(feat.attribute('task-uuid'))
+                description = feat.attribute('task-description')
                 point = feat.geometry().asPoint()
-                entry = FeatureAddedEntry(fid, taskUuid, waypointUuid, point.y(),
+                entry = FeatureAddedEntry(fid, taskUuid, description, waypointUuid, point.y(),
                                           point.x())
                 self._journal.append(entry)
             case self.State.CUSTOM_EDIT_COMMAND:
@@ -320,9 +400,9 @@ class MissionLayerBridge(QObject):
         for entry in self._journal:
             print(entry)
             match entry:
-                case FeatureAddedEntry(fid, taskUuid, waypointUuid, latitude, longitude):
+                case FeatureAddedEntry(fid, taskUuid, description, waypointUuid, latitude, longitude):
                     assert(waypointUuid)
-                    self.parent().addWaypoint(taskUuid, latitude, longitude, waypointUuid)
+                    self.parent().addWaypoint(taskUuid, description, latitude, longitude, waypointUuid)
                 case FeatureDeletedEntry(fid, waypointUuid):
                     # Deleting one fixed waypoint may delete its entire task, including
                     # other features in the same QGIS edit command.
