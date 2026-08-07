@@ -191,6 +191,17 @@ class MissionTracks(QObject):
         settings.isExpression = True
         settings.setFormat(fmt)
 
+        settings.placement = Qgis.LabelPlacement.Line
+        settings.placementFlags = Qgis.LabelLinePlacementFlag.AboveLine
+        settings.distUnits = Qgis.RenderUnit.Millimeters
+        settings.dist = 2.0
+
+        settings.addDirectionSymbol = True
+        settings.leftDirectionSymbol = chr(57983)
+        settings.rightDirectionSymbol = chr(57982)
+        settings.placeDirectionSymbol = QgsPalLayerSettings.SymbolLeftRight
+        settings.reverseDirectionSymbol = False
+
         labeling = QgsVectorLayerSimpleLabeling(settings)
         self._layer.setLabeling(labeling)
 
