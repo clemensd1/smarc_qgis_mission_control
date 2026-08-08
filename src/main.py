@@ -4,11 +4,11 @@ import platform
 import os
 import subprocess
 
-from qgis.PyQt.QtCore import QObject, Qt, QSize, pyqtSlot
+from qgis.PyQt.QtCore import QObject, Qt, QSize, QTimer, pyqtSlot
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QDialog, QSizePolicy, QWidget, QMessageBox
 from qgis.gui import QgisInterface
-from qgis.core import QgsProject, QgsApplication
+from qgis.core import QgsProject, QgsApplication, QgsSettings
 
 from .context.FleetContext import FleetContext
 from .mission.MissionContext import MissionContext
@@ -50,8 +50,19 @@ class SMaRCMissionControlPlugin(QObject):
             str(self.plugin_dir / "ui" / "svg" / "smarclogo1.png")
         )
 
+        ## settings file related
         settings_dir = QgsApplication.qgisSettingsDirPath()
         self.settings_file_path = str(f"{settings_dir}/smarc_qgis_mission_control/settings.json")
+
+        ## mapTips delay settings
+        # permanent, global settings overwrite! active after restart of QGIS. native default: 850
+        # QgsSettings().setValue("qgis/mapTipsDelay", 850)
+
+        # find mapTips timer to reduce mapTips delay
+        for timer in iface.mapCanvas().findChildren(QTimer):
+            if timer.interval() == 850:
+                self.mapTip_timer = timer
+                self.mapTip_timer.setInterval(0)
 
         self.fleetContext = FleetContext(self)
         self.missionContext = MissionContext(self)
@@ -107,7 +118,9 @@ class SMaRCMissionControlPlugin(QObject):
         self.toolbar.addAction(self.settingsAction)
         self.settingsButton = self.toolbar.widgetForAction(self.settingsAction)
 
-
+        map_tips_action = self.iface.actionMapTips()
+        if not map_tips_action.isChecked():
+            map_tips_action.trigger()
         
 
     def unload(self):

@@ -77,6 +77,10 @@ class MissionLayerBridge(QObject):
         self._initializeLayers(plan.uuid)
         self._populateLayers(plan)
 
+        self.waypointLayer.setMapTipTemplate(
+            '<b>Tolerance:</b> [% "tolerance" %] m'
+        )
+
     def _setupLayerGroup(self, planUuid: UUID) -> None:
         # Find or create the SMaRCMissions group at the top of the layer tree
         qgs = QgsProject.instance()
@@ -214,6 +218,7 @@ class MissionLayerBridge(QObject):
         feat.setGeometry(geom)
         feat.setAttribute('task-uuid', str(taskUuid))
         feat.setAttribute('waypoint-uuid', str(waypoint.uuid))
+        feat.setAttribute('tolerance', float(waypoint.tolerance))
 
         return feat
 
